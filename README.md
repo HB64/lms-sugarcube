@@ -16,6 +16,7 @@ A modified version of the SugarCube plugin by [AF1](https://github.com/AF-1/).<b
 
 ✨ Statistics (ratings, play counts…) are now pulled **directly from the LMS database**.<br>
 ✨ Added "Floating Wobble" option at the per player settings part of "Sugarcube Wobble"
+
 ✨ Removed Google Traffic from the global settings part.
 
 ❌ The deprecated **TrackStat** plugin is therefore no longer supported / required.
