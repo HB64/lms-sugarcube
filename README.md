@@ -15,6 +15,7 @@ A modified version of the SugarCube plugin by [Charles Parker](https://www.spice
 ## Changes
 
 ✨ Statistics (ratings, play counts…) are now pulled **directly from the LMS database**.<br>
+✨ Added "Floating Wobble" option at the per player settings part of "Sugarcube Wobble"
 
 ❌ The deprecated **TrackStat** plugin is therefore no longer supported / required.
 
