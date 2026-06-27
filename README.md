@@ -2,12 +2,12 @@ SugarCube
 ====
 ![Min. LMS Version](https://img.shields.io/badge/Min._LMS_Version_Required-7.9-darkgreen)<br>
 
-A modified version of the SugarCube plugin by [Charles Parker](https://github.com/AF-1)).<br>
+A modified version of the SugarCube plugin by [AF1](https://github.com/AF-1)).<br>
 **No guarantees that it will work or continue to do so**.<br>
 
 > [!NOTE]
 > ⚠️ **I'm not maintaining this plugin. I don't provide support for it.**<br>
-> This version is based on the [**7.08** github version][(https://github.com/AF-1/lms-sugarcube), *<ins>not</ins> version 6.01*.<br>
+> This version is based on the [**7.08** github version](https://github.com/AF-1/lms-sugarcube), *<ins>not</ins> version 6.01*.<br>
 > If you have any problems, check out the [Lyrion Community Support Forum](https://forums.lyrion.org/).
 
 <br><br><br>
