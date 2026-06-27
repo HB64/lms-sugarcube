@@ -24,7 +24,7 @@ A modified version of the SugarCube plugin by [Charles Parker](https://www.spice
 ## Installation
 
 - Add the repository URL below at the bottom of *LMS* > *Settings* > *Plugins* and click *Apply*:<br>
-[https://raw.githubusercontent.com/AF-1/sobras/main/repos/lmsghonly/public.xml](https://raw.githubusercontent.com/AF-1/sobras/main/repos/lmsghonly/public.xml)
+[https://raw.githubusercontent.com/AF-1/sobras/main/repos/lmsghonly/public.xml](https://raw.githubusercontent.com/HB64/lms-sugarcube/main/public.xml)]
 
 - Install the plugin from the added repository at the bottom of the page.
 
