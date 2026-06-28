@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extensions>
+	<plugins>
+		<plugin name="SugarCube" category="playlists" version="7.0.8.3" minTarget="7.9" maxTarget="*">
+			<title lang="EN">SugarCube</title>
+			<desc lang="EN">A modified version of the SugarCube plugin with Floating Wobble support, Google traffic removed and added artist weighting.</desc>
+			<url>https://github.com/HB64/lms-sugarcube/releases/download/7.0.8.3/lms-sugarcube-7.0.8.3.zip</url>
+			<creator>Charles Parker, AF1, HB64</creator>
+			<link>https://github.com/HB64/lms-sugarcube</link>
+			<sha>38d372842a272f2229cf74cbad4b992252d07a61</sha>
+		</plugin>
+	</plugins>
+</extensions>
