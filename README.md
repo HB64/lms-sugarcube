@@ -18,7 +18,7 @@ A modified version of the SugarCube plugin by [AF-1](https://github.com/AF-1/).<
 ❌ The deprecated **TrackStat** plugin is therefore no longer supported / required.<br>
 ✨ Added "Floating Wobble" option at the per player settings part of "Sugarcube Wobble"<br>
 ✨ Removed Google Traffic from the global settings part.<br>
-✨ Added "Preferred Artist" and "Less Preferred Artist" with "Weighting" option at the per player settings part.
+✨ Added "Preferred Artist" and "Less Preferred Artist" with "Weighting" option at the per player settings part.<br>
   ⚠️ *Known issue: artist names with special characters (e.g. ö, é) may not match reliably yet.*
 
 <br><br><br>
