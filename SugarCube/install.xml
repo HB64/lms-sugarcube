@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<extension>
+	<id>af168d88-e109-469d-6c80-b65fd836896f</id>
+	<name>PLUGIN_SUGARCUBE</name>
+	<module>Plugins::SugarCube::Plugin</module>
+	<version>7.0.8.3</version>
+	<description>PLUGIN_SUGARCUBE_DESCINSTALL</description>
+	<creator>Charles Parker, AF, HB64</creator>
+	<icon>plugins/SugarCube/HTML/images/sugarcube.png</icon>
+	<homepageURL>https://github.com/HB64/lms-sugarcube</homepageURL>
+	<optionsURL>plugins/SugarCube/settings/settings.html</optionsURL>
+	<defaultState>enabled</defaultState>
+	<targetApplication>
+		<id>Lyrion Music Server</id>
+		<maxVersion>*</maxVersion>
+		<minVersion>7.9</minVersion>
+	</targetApplication>
+</extension>
