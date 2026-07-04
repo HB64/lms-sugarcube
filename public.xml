@@ -7,7 +7,8 @@
 			<url>https://github.com/HB64/lms-sugarcube/releases/download/7.0.8.3/lms-sugarcube-7.0.8.3.zip</url>
 			<creator>Charles Parker, AF1, HB64</creator>
 			<link>https://github.com/HB64/lms-sugarcube</link>
-			<sha>ed7341d56733806e0787e5e4537c24bcd8fe75c7</sha>
+			<sha>ffdc978df12fdfdad3df418acf45c1a13f599549</sha>
 		</plugin>
 	</plugins>
+</extensions>
 </extensions>
