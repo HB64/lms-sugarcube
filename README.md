@@ -18,6 +18,7 @@ A modified version of the SugarCube plugin by [AF-1](https://github.com/AF-1/).<
 ✨ Added a new **SugarCube Quick Settings** page (under *Extras*) to change Mix Style/Variety, Mix Type, and whichever of Filter/Genre/Artist/Mood/Mood Filter/Recipe applies, on the fly - everything saves instantly.<br>
 ✨ Changing Filter, Recipe, Genre, Artist, Mood or Mood Filter in Quick Settings now automatically replaces the upcoming track to match, with a live "Currently Playing" / "Coming Up Next" view and a "Replace This Track" button under each.<br>
 ✨ The "SugarCube Auto Mix" page now also shows "Coming Up Next", with its own replace button. The "New Track" button no longer clears anything already queued after the current track.<br>
+🐛 Fixed the "Replace Track" function, with the correct "Per Player" settings, replacement is reliable now. <br>
 🐛 Fixed the MusicIP Vintage Mode section not collapsing correctly in the Material app.<br>
 🐛 Fixed Genre/Artist/Mood Mixing not producing a mix when starting from an empty playlist.<br>
 ✨ Statistics (ratings, play counts…) are now pulled **directly from the LMS database**.<br>
