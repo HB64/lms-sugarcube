@@ -242,6 +242,14 @@ PLUGIN_SC_WEB_GENRE
 	EN	Available MIP Genres
 PLUGIN_SC_WEB_GENREDESC
 	EN	Genres are taken from MusicIP
+PLUGIN_SC_WEB_MOOD
+	EN	Available MIP Moods
+PLUGIN_SC_WEB_MOODDESC
+	EN	Moods are taken from MusicIP's Mood playlists (stored in your MusicIP Moods folder)
+PLUGIN_SC_WEB_MOOD_FILTER
+	EN	Mood Filter
+PLUGIN_SC_WEB_MOOD_FILTERDESC
+	EN	Optional: combine the selected Mood with a MusicIP Filter, since the Mood result depends on the active filter
 PLUGIN_SC_WEB_ARTISTS
 	EN	Available MIP Artists
 PLUGIN_SC_WEB_ARTISTSDESC
@@ -257,23 +265,27 @@ PLUGIN_SC_WEB_PLAYTRACKALBUM
 PLUGIN_SC_WEB_PLAYTRACKALBUMTEXT
 	EN	Set Squeezebox "Play Other Songs in Album" Client Setting when SugarCube is Enabled or Disabled
 PLUGIN_SC_WEB_ALARM_TYPE
-	EN	Auto Mix and Alarm Clock Settings
+	EN	Alarm Clock Settings
 PLUGIN_SC_WEB_ALARM_TYPEDESC
-	EN	Use MusicIP Filter or Genre for Alarm Clock Playlist and the Auto Start Mix	setting
+	EN	Use MusicIP Filter, Genre or Mood for the Alarm Clock Playlist. The regular SugarCube Auto Mix button no longer needs this - it always follows your main SugarCube Mix Type setting above.
 PLUGIN_SC_WEB_ALARMFILTER
 	EN	Use MIP Filter
 PLUGIN_SC_WEB_ALARMGENRE
 	EN	Use MIP Genre
 PLUGIN_SC_WEB_ALARMGENREDESC
-	EN	Use MusicIP Genre for the Alarm Clock Playlist and the Auto Start Mix setting
+	EN	Use MusicIP Genre for the Alarm Clock Playlist
+PLUGIN_SC_WEB_ALARMMOOD
+	EN	Use MIP Mood
+PLUGIN_SC_WEB_ALARMMOODDESC
+	EN	Use MusicIP Mood (optionally combined with the filter above) for the Alarm Clock Playlist
 PLUGIN_SC_WEB_ALARMFILTERDESC
-	EN	Use MusicIP Filter for the Alarm Clock Playlist and the Auto Start Mix setting
+	EN	Use MusicIP Filter for the Alarm Clock Playlist
 PLUGIN_SC_WEB_TRACKWEIGHT
 	EN	SugarCube Enhancements
 PLUGIN_SC_WEB_BLOCKARTIST
 	EN	Block Artist Repeating for x Tracks
 PLUGIN_SC_WEB_BLOCKARTISTDESC
-	EN	Block the track if we have played the Artist within the specified number of Tracks
+	EN	Block the track if we have played the Artist within the specified number of Tracks. Tip: for best variety with Replace/Start a Mix, set this, 'Block Album Repeating' and 'Remember last X tracks' high. Low values make the same tracks come back around quickly.
 PLUGIN_SC_WEB_VARTIST
 	EN	Do not Block "Various Artists"
 PLUGIN_SC_WEB_VARTISTDESC
@@ -282,6 +294,8 @@ PLUGIN_SC_WEB_BLOCKARTIST_ALWAYS
 	EN	Always Block Selected Artist
 PLUGIN_SC_WEB_BLOCKARTIST_ALWAYSDESC
 	EN	Always Block the Selected Artist so that it does not play.  This may be ignored when selecting a random track
+PLUGIN_SC_WEB_ARTISTWEIGHT_HEADER
+	EN	Artist Weighting (optional)
 PLUGIN_SC_WEB_PREFERARTIST
 	EN	Preferred Artist
 PLUGIN_SC_WEB_PREFERARTISTDESC
@@ -305,11 +319,11 @@ PLUGIN_SC_WEB_BLOCKGENRE_ALWAYSDESC
 PLUGIN_SC_WEB_BLOCKALBUM
 	EN	Block Album Repeating for x Tracks
 PLUGIN_SC_WEB_BLOCKALBUMDESC
-	EN	Block the track if we have played its Album within the specified number of Tracks
+	EN	Block the track if we have played its Album within the specified number of Tracks. Tip: for best variety with Replace/Start a Mix, set this, 'Block Artist Repeating' and 'Remember last X tracks' high. Low values make the same tracks come back around quickly.
 PLUGIN_SC_WEB_REMEMBERTRACKS
 	EN	Remember This Many Played Tracks
 PLUGIN_SC_WEB_REMEMBERTRACKSDESC
-	EN	Block the track is we have played it within the specified number of Tracks
+	EN	Block the track is we have played it within the specified number of Tracks. Tip: for best variety with Replace/Start a Mix, set this, 'Block Artist Repeating' and 'Block Album Repeating' high. Low values make the same tracks come back around quickly.
 PLUGIN_SC_WEB_SHUFFLEMENU
 	EN	Override Shuffle
 PLUGIN_SC_WEB_SHUFFLEMENUDESC
@@ -456,6 +470,30 @@ PLUGIN_SUGARCUBEHIS
 	EN	SugarCube History
 PLUGIN_SUGARCUBEQP
 	EN	SugarCube Auto Mix
+PLUGIN_SC_WEB_NEWTRACK
+	EN	New Track
+PLUGIN_SC_WEB_PICKING
+	EN	Picking...
+PLUGIN_SUGARCUBEQS
+	EN	SugarCube Quick Settings
+PLUGIN_SC_WEB_QS_SAVED
+	EN	Settings updated
+PLUGIN_SC_WEB_QS_APPLY
+	EN	Apply
+PLUGIN_SC_WEB_QS_REPLACING
+	EN	SugarCube is replacing the next track
+PLUGIN_SC_WEB_QS_REPLACING_CURRENT
+	EN	SugarCube is replacing the current track
+PLUGIN_SC_WEB_QS_STARTING
+	EN	SugarCube has started a mix
+PLUGIN_SC_WEB_QS_REPLACEAGAIN
+	EN	Replace This Track
+PLUGIN_SC_WEB_QS_STARTMIX
+	EN	Start a Mix
+PLUGIN_SC_WEB_VARIETY_INFO
+	EN	For the best track variety when using Replace/Start a Mix, set 'Remember last X tracks', 'Block Artist Repeating for x Tracks' and 'Block Album Repeating for x Tracks' high on the Player Settings page (SugarCube Mix Mode section). Low values make the same tracks come back around quickly.
+PLUGIN_SC_WEB_CLOSE
+	EN	Close
 PLUGIN_SUGARCUBE_PLAYING
 	EN	Currently Playing
 PLUGIN_SC_WEB_SETSAVE

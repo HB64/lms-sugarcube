@@ -8,15 +8,33 @@ https://paypal.me/spicefly
 HB64 Fork - Changes
 +===================+
 
+v7.0.9.8 - 2026
+- Fixed "Replace This Track" / "Replace Next Track" so the replaced track is
+  now reliably excluded from being picked again straight away (a path-format
+  mismatch on NAS/Dynamic-Path-Conversion setups meant this exclusion could
+  silently fail)
+- Fixed the replacement track being added to the end of the playlist instead
+  of straight back into the "next" slot
+- Genre blocking (per-player "Always Block this Genre" settings) is now also
+  respected by the random-track fallback used by Replace
+- SugarCube Quick Settings: "How much Mix Style" / "How much Mix Variety"
+  are now proper drag sliders instead of a click-stepper (which could
+  trigger the page to refresh, closing the settings section, on every click)
+- Added a "Replace Track" info popup (ⓘ) next to the relevant Quick Settings
+  / Auto Mix buttons, and extended the built-in help text on the "Block
+  Artist Repeating", "Block Album Repeating" and "Remember last X tracks"
+  settings - see "REPLACE TRACK - WHY THE SAME TRACKS COME BACK QUICKLY"
+  below for the full explanation
+
 v7.0.8.3 - 2026
 - Added Artist Weighting in per-player settings
   * Up to 3 Preferred Artists with a weight of 1-5 (weight 1 = twice as likely, weight 5 = six times as likely)
   * Up to 3 Less Preferred Artists with a weight of 1-5 (weight 1 = half as likely, weight 5 = one sixth as likely)
   * Less Preferred is not the same as blocking: the artist can still play, just less often
   * If all candidates are filtered out by Less Preferred weighting, the full candidate list is used as fallback
-  * Replaced the "Spicefly SugarCube - Auto Mix" credits page (which linked off-site
-    to a Rick Roll) with a simple "Started a SugarCube Mix - Enjoy your Music!" confirmation
-  * Automatically returns to Now Playing after ~10 seconds - no manual back-tap needed
+- Replaced the "Spicefly SugarCube - Auto Mix" credits page (which linked off-site
+  to a Rick Roll) with a simple "Enjoy your mix!" confirmation
+  * Automatically returns to Now Playing after ~1.2 seconds - no manual back-tap needed
   * Confirmed working in both the classic Default skin and the Material skin
     (LMS-Material app), which needed a different fix since Material opens this
     page inside its own dialog rather than a classic frameset
@@ -74,6 +92,26 @@ Wobble (Any) every time a new track is selected. This gives playback a
 more varied, less predictable feel - sometimes staying close to the seed
 track, sometimes wandering further - without you having to manually
 switch the Wobble setting yourself.
+
+
+REPLACE TRACK - WHY THE SAME TRACKS CAN COME BACK QUICKLY
++===================+
+"Replace This Track" and "Replace Next Track" ask MusicIP for a fresh mix
+each time you click them. MusicIP itself only returns a fairly small list of
+candidate tracks for a given seed track, so if SugarCube's own "already
+played" tracking is set low, the same handful of tracks can appear to come
+back around quickly - even though a genuinely fresh candidate list was
+requested every time.
+
+For the best variety when using Replace or Start a Mix, go to the per-player
+settings page (SugarCube Mix Mode section) and set these three values high:
+- "Remember last X tracks"
+- "Block Artist Repeating for x Tracks"
+- "Block Album Repeating for x Tracks"
+
+These are three separate settings and all three need to be raised together -
+raising only one of them will not fix the problem. Low values on any of
+them will make tracks come back around quickly.
 +===================+
 Licencing Requirements Removed
 Released as Open Source under the GNU General Public License v3.0

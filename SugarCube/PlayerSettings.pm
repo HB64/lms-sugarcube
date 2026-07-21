@@ -95,6 +95,12 @@ sub handler {
 
 		my $sugarcube_genre = $params->{'sugarcube_genre'};
 		$prefs->client($client)->set('sugarcube_genre', "$sugarcube_genre");
+
+		my $sugarcube_mood = $params->{'sugarcube_mood'};
+		$prefs->client($client)->set('sugarcube_mood', "$sugarcube_mood");
+
+		my $sugarcube_mood_filter = $params->{'sugarcube_mood_filter'};
+		$prefs->client($client)->set('sugarcube_mood_filter', "$sugarcube_mood_filter");
 		
 		my $sugarcube_artist = $params->{'sugarcube_artist'};
 		$prefs->client($client)->set('sugarcube_artist', "$sugarcube_artist");
@@ -161,6 +167,9 @@ sub handler {
 
 		my $scalarm_genre = $params->{'scalarm_genre'};
 		$prefs->client($client)->set('scalarm_genre', "$scalarm_genre");
+
+		my $scalarm_mood = $params->{'scalarm_mood'};
+		$prefs->client($client)->set('scalarm_mood', "$scalarm_mood");
 		
 		my $sugarcube_vartist = $params->{'sugarcube_vartist'};
 		$prefs->client($client)->set('sugarcube_vartist', "$sugarcube_vartist");
@@ -285,6 +294,8 @@ sub handler {
 				$prefs->client($player)->set('sugarcube_restrict_genre', "$sugarcube_restrict_genre");
 				$prefs->client($player)->set('sugarcube_receipes', "$sugarcube_receipes");
 				$prefs->client($player)->set('sugarcube_genre', "$sugarcube_genre");
+				$prefs->client($player)->set('sugarcube_mood', "$sugarcube_mood");
+				$prefs->client($player)->set('sugarcube_mood_filter', "$sugarcube_mood_filter");
 				$prefs->client($player)->set('sugarcube_artist', "$sugarcube_artist");
 				$prefs->client($player)->set('sugarcube_morningfilter', "$sugarcube_morningfilter");
 				$prefs->client($player)->set('sugarcube_dayfilter', "$sugarcube_dayfilter");
@@ -307,6 +318,7 @@ sub handler {
 				$prefs->client($player)->set('scblockgenre_alwaystwo', "$scblockgenre_alwaystwo");
 				$prefs->client($player)->set('scblockgenre_alwaysthree', "$scblockgenre_alwaysthree");
 				$prefs->client($player)->set('scalarm_genre', "$scalarm_genre");
+				$prefs->client($player)->set('scalarm_mood', "$scalarm_mood");
 				$prefs->client($player)->set('sugarcube_vartist', "$sugarcube_vartist");
 				$prefs->client($player)->set('sugarcube_fade', "$sugarcube_fade");
 				$prefs->client($player)->set('sugarcube_blockartist', "$sugarcube_blockartist");
@@ -466,10 +478,13 @@ sub handler {
 	$params->{'prefs'}->{'sugarcube_mix_type'}  = $prefs->client($client)->get('sugarcube_mix_type');
 	$params->{'prefs'}->{'sugarcube_restrict_genre'}  = $prefs->client($client)->get('sugarcube_restrict_genre');
 	$params->{'prefs'}->{'scalarm_genre'}  = $prefs->client($client)->get('scalarm_genre');
+	$params->{'prefs'}->{'scalarm_mood'}  = $prefs->client($client)->get('scalarm_mood');
 	$params->{'prefs'}->{'sugarcube_dynamicq'}  = $prefs->client($client)->get('sugarcube_dynamicq');
 	$params->{'prefs'}->{'sugarcube_filteractive'} = $prefs->client($client)->get('sugarcube_filteractive');	
 	$params->{'prefs'}->{'sugarcube_receipes'}  = $prefs->client($client)->get('sugarcube_receipes');
 	$params->{'prefs'}->{'sugarcube_genre'}  = $prefs->client($client)->get('sugarcube_genre');
+	$params->{'prefs'}->{'sugarcube_mood'}  = $prefs->client($client)->get('sugarcube_mood');
+	$params->{'prefs'}->{'sugarcube_mood_filter'}  = $prefs->client($client)->get('sugarcube_mood_filter');
 	$params->{'prefs'}->{'sugarcube_artist'}  = $prefs->client($client)->get('sugarcube_artist');
 	$params->{'prefs'}->{'sugarcube_morningfilter'}  = $prefs->client($client)->get('sugarcube_morningfilter');
 	$params->{'prefs'}->{'sugarcube_dayfilter'}  = $prefs->client($client)->get('sugarcube_dayfilter');
@@ -539,6 +554,7 @@ sub handler {
 	
 	$params->{'filters'} = getFilterList();
 	$params->{'genres'} = getGenresList();
+	$params->{'moods'} = getMoodsList();
 	$params->{'receipes'} = getReceipesList();
 	$params->{'artists'} = getArtistsList();
 
@@ -590,6 +606,41 @@ sub getFilterList {
 	$timeoutvalue = 2;
 	}
 	return \%filterHash;	
+}
+
+####
+# MOODS
+#
+#
+sub getMoodsList {
+	my @filters    = ();
+	my %filterHash = ();
+	
+	my $MMSport = $prefs->get('sugarport');
+	my $miphosturl = $prefs->get('miphosturl');
+
+	my $url = 'http://' . $miphosturl . ":$MMSport/api/moods";
+	my $ua = LWP::UserAgent->new();
+	$ua->timeout($timeoutvalue);
+	my $http = $ua->get($url);		
+	
+	if ($http) {
+		@filters = split(/\n/, $http->content);
+	}
+	my $none = sprintf('(%s)', Slim::Utils::Strings::string('NONE'));
+	push @filters, $none;
+	foreach my $filter ( @filters ) {
+		if ($filter eq $none) {
+			$filterHash{0} = $filter;
+			next
+		}
+		$filterHash{$filter} = $filter;
+	}
+	if ($http->header("Client-Warning") =~ /Internal response/) {
+		# did not reach the server at all
+	$log->warn("\nMusicIP is NOT Running!");		
+	}
+	return \%filterHash;
 }
 
 ####

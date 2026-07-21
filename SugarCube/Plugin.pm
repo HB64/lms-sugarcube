@@ -74,6 +74,7 @@ my %genres            = ();
 my $htmlTemplate      = 'plugins/SugarCube/settings/history.html';
 my $htmlTemplateLV    = 'plugins/SugarCube/settings/liveview.html';
 my $htmlQuickPlay     = 'plugins/SugarCube/settings/quickplay.html';
+my $htmlQuickSettings = 'plugins/SugarCube/settings/quicksettings.html';
 my %nowPlayingmapping = ( 'pause.hold' => 'quietnext', );
 my $global_quickmix    = 0;  # if quick fire mix from currently playing selected
 my %slide_start_volume = (); # Holds clients volume level before sliding
@@ -1454,6 +1455,7 @@ sub SugarCubeReplaceNext {
 
     my $client = shift;
     my $request;
+    my $droppedurl;
     my $songIndex = Slim::Player::Source::streamingSongIndex($client);
     $songIndex++;
     my $listlength = Slim::Player::Playlist::count($client);
@@ -1470,6 +1472,31 @@ sub SugarCubeReplaceNext {
         ) = Plugins::SugarCube::Breakout::getmyNextSong($client);
         Plugins::SugarCube::Breakout::SaveHistory( $client, $UPNArtist,
             $UPNTrack, $UPNAlbum, $UPNGenre, $UPNAlbumArt, $UPNFULLAlbum );
+
+        # Remember the track we're about to remove, so the replacement
+        # request can explicitly skip it. gotMIP() compares candidates
+        # against this as a plain decoded filesystem path (matching
+        # WorkingSet.temptrack's format), not as a file:// URL, or the
+        # comparison never matches.
+        #
+        # Slim::Player::Playlist::song() returns a Track OBJECT, not a URL
+        # string (unlike Slim::Player::Playlist::url(), which does) - pull
+        # the URL out of it explicitly first.
+        my $droppedsong = Slim::Player::Playlist::song( $client, $songIndex );
+        my $droppedsongurl =
+          ref($droppedsong) ? $droppedsong->url : $droppedsong;
+
+        # Also register it in TrackTracker for the normal "already played"
+        # history mechanism (belt and braces, helps future normal kickoffs).
+        if ($droppedsongurl) {
+            my $droppedtrack =
+              Slim::Utils::Misc::pathFromFileURL($droppedsongurl);
+            $droppedtrack = dirtyencoder($droppedtrack);
+            $droppedurl   = $droppedtrack;
+            Plugins::SugarCube::Breakout::TrackTracker( $client, $droppedtrack )
+              if length $droppedtrack;
+        }
+
         $request = $client->execute( [ 'playlist', 'delete', $songIndex ] );
     }
     my $msg = ('Replacing Track');
@@ -1482,7 +1509,34 @@ sub SugarCubeReplaceNext {
 
         }
     );
-    kickoff($client);
+
+    if ( $listlength == 0 ) {
+
+        # Empty playlist - kickoff() needs a currently playing track to
+        # build its seed from, which doesn't exist here. Mirror the
+        # seedless request used by AutoStartMix (the "SugarCube Auto Mix"
+        # button) instead, so a track still gets picked.
+        my $mypageurl = buildMIPReq( $client, '' );
+        my $http = Slim::Networking::SimpleAsyncHTTP->new(
+            \&gotMIP,
+            \&gotErrorViaHTTP,
+            {
+                caller     => 'SpiceflyAutoMix',
+                callerProc => \&AutoStartMix,
+                client     => $client,
+                timeout    => 60
+            }
+        );
+        $http->get($mypageurl);
+    }
+    else {
+        # Tell kickoff()/gotMIP() to insert the new track right after the
+        # current position (where the deleted "next" track used to be)
+        # instead of appending it to the end of the playlist - otherwise
+        # whatever was already further down the queue just slides into
+        # the "next" slot instead of the freshly picked track.
+        kickoff( $client, $droppedurl, 1 );
+    }
 }
 
 sub setMode {
@@ -1832,6 +1886,19 @@ sub kickoff {
     no warnings 'numeric';
 
     my $client = shift;
+
+    # Optional: an LMS track URL that the caller wants excluded from the
+    # result (eg. SugarCubeReplaceNext passes the track it just deleted,
+    # so the same track can't just come straight back).
+    my $avoidurl = shift;
+
+    # Optional: if set, insert the resulting track right after the
+    # current position instead of appending it to the end of the
+    # playlist. SugarCubeReplaceNext sets this so the replacement lands
+    # exactly where the deleted track was; normal kickoff() calls (auto
+    # advance, alarms, etc.) leave this unset and keep appending as before.
+    my $insertnext = shift;
+
     return unless $client;    # Catch when client has disappeared
     my $track;
     my $song;
@@ -1908,7 +1975,8 @@ sub kickoff {
     if ( $sugarcube_mode == 0 || $sugarcube_mode eq '' )
     {    # Standard MusicIP Mode - default failback if no prefs set
         my $mypageurl = buildMIPReq( $client, $untouchedtrack );
-        my $diditwork = SendtoMIPAsync( $client, $mypageurl );
+        my $diditwork =
+          SendtoMIPAsync( $client, $mypageurl, $avoidurl, $insertnext );
     }
     else {
         FreeStyle($client);    # FreeStyle Mode
@@ -2189,6 +2257,17 @@ sub gotMIP {
 
     $mixstatus = '';    # Reset MIP Status
 
+    # An LMS track URL to skip if it shows up as a candidate - set by
+    # SugarCubeReplaceNext/ReplaceKickoffTrack to the track they just
+    # removed, so "Replace" can't just hand the same track straight back.
+    my $avoidurl = $params->{'avoidurl'};
+
+    # If set, the resulting track must be inserted right after the
+    # current position instead of appended to the end of the playlist -
+    # set by SugarCubeReplaceNext so the replacement lands exactly where
+    # the deleted "next" track used to be.
+    my $insertnext = $params->{'insertnext'};
+
     my $creator = $params->{'caller'};  # CHECK WHETHER ASYNC WAS FROM QUICK MIX
 
     if ( $creator eq 'SpiceflyONE' ) {
@@ -2196,6 +2275,15 @@ sub gotMIP {
     }
     else {
         $global_quickmix = 0;
+    }
+
+    # Replacing the "kick off" (currently playing) track while leaving
+    # anything already queued after it untouched - insert the new track
+    # right after current, jump to it, then drop the old one.
+    my $mip_replacekickoff_oldindex;
+    if ( $creator eq 'SpiceflyReplaceKickoff' ) {
+        $mip_replacekickoff_oldindex =
+          Slim::Player::Source::streamingSongIndex($client);
     }
 
     my $changeindex = 0;
@@ -2237,6 +2325,16 @@ sub gotMIP {
             $element =~ s/$nasconvertpath_2/$localmediapath_2/i;
 
             #			$log->debug("Converted element;$element\n");
+
+            # The substitutions above only swap the matched NAS PREFIX
+            # (eg. "Z:\music" -> "/music") - everything after that prefix
+            # keeps MusicIP's original Windows-style backslashes, so the
+            # result is a mixed-slash path ("/music\Artist\Album\Song.flac")
+            # that never matches LMS's own clean forward-slash paths
+            # (used by TrackTracker/AlbumTracker/ArtistTracker, and by the
+            # "avoid this track" check below). Normalize the rest of the
+            # path too so track-level exclusion actually matches.
+            $element =~ s/\\/\//g;
 
         }
 
@@ -2504,6 +2602,24 @@ sub gotMIP {
         ## Apply artist weighting (prefer/less) before selection
         @myworkingset = Plugins::SugarCube::Breakout::applyArtistWeighting( $client, @myworkingset );
 
+        # Drop the track we were explicitly asked to avoid (the one just
+        # removed by a "Replace" action) by exact LMS URL match - this
+        # doesn't depend on path formatting the way the TrackTracker/
+        # DropEmPunk DB comparison does, so it can't silently fail to
+        # match. If this empties the set, the existing fallback logic
+        # below (randompuller/getRealRandom) takes over, which is a
+        # better outcome than handing back the same track.
+        if ( defined($avoidurl) && length($avoidurl) ) {
+            my @filtered;
+            for ( my $i = 0 ; $i < scalar(@myworkingset) ; $i += 10 ) {
+                next
+                  if ( defined( $myworkingset[$i] )
+                    && $myworkingset[$i] eq $avoidurl );
+                push @filtered, @myworkingset[ $i .. $i + 9 ];
+            }
+            @myworkingset = @filtered;
+        }
+
         my $sugarcube_wobble = $prefs->client($client)->get('sugarcube_wobble');
         if (   $sugarcube_wobble == 1
             || $sugarcube_wobble == 2
@@ -2667,7 +2783,32 @@ sub gotMIP {
                 "********* FAILED STOP - Nothing to work with *********\n");
         }
         else {
-            addtrack( $client, $song );    # song is hashed up
+            if ( defined($mip_replacekickoff_oldindex) ) {
+                addtrack( $client, $song, 'insert' )
+                  ;    # place right after the currently playing track
+                my $mip_replacekickoff_newindex =
+                  $mip_replacekickoff_oldindex + 1;
+                my $request =
+                  $client->execute(
+                    [ 'playlist', 'jump', $mip_replacekickoff_newindex ] );
+                $request->source('PLUGIN_SUGARCUBE');
+                $request =
+                  $client->execute(
+                    [ 'playlist', 'delete', $mip_replacekickoff_oldindex ] );
+                $request->source('PLUGIN_SUGARCUBE');
+                $request = $client->execute( ['play'] );
+                $request->source('PLUGIN_SUGARCUBE');
+            }
+            elsif ($insertnext) {
+
+                # "Replace Next" - put the new track back exactly where
+                # the deleted one was (right after current), instead of
+                # appending it to the end of the playlist.
+                addtrack( $client, $song, 'insert' );
+            }
+            else {
+                addtrack( $client, $song );    # song is hashed up
+            }
         }
     }
 
@@ -2734,6 +2875,28 @@ sub randompuller {
       Plugins::SugarCube::Breakout::getGenre( $client, $song );
     $log->debug("\nCurrently Playing; $song\n");
     $log->debug("\nCurrently Playing Genre; $NEWSCgenre\n");
+
+    # This fallback deliberately asks for "another track in the same
+    # genre as what's currently playing" - but if that genre is one the
+    # user has blocked, that would hand back exactly what they blocked.
+    # Refuse to do that; let the caller fall through to getRealRandom()
+    # (genre-blind) instead.
+    my $scblockgenre_always =
+      $prefs->client($client)->get('scblockgenre_always');
+    my $scblockgenre_alwaystwo =
+      $prefs->client($client)->get('scblockgenre_alwaystwo');
+    my $scblockgenre_alwaysthree =
+      $prefs->client($client)->get('scblockgenre_alwaysthree');
+    if (   length($NEWSCgenre)
+        && (   $NEWSCgenre eq $scblockgenre_always
+            || $NEWSCgenre eq $scblockgenre_alwaystwo
+            || $NEWSCgenre eq $scblockgenre_alwaysthree ) )
+    {
+        $log->debug(
+"\nCurrently Playing Genre ($NEWSCgenre) is blocked - skipping same-genre random fallback\n"
+        );
+        return "FAILED";
+    }
 
     (
         my $SCTRACKURL,
@@ -3167,14 +3330,19 @@ sub buildMIPReq {
         $album_or_song = '&song%3d';     # song
     }
 
+    # No seed track (eg. kicking off from an empty playlist) - dont send
+    # an empty &album=/&song= parameter, MIP doesnt mix well off that
+    # combined with a genre/mood/filter on top of it. Let the mix_type
+    # specific filter below drive the request instead.
+    my $seedpart = ( $tracktitle eq '' ) ? '' : ( $album_or_song . $tracktitle );
+
     $mypageurl =
       (     'http://'
           . $miphosturl . ':'
           . $sugarport
           . '/api/mix?&sizetype=tracks&size='
           . $sugarmipsize
-          . $album_or_song
-          . $tracktitle
+          . $seedpart
           . $sugarcube_style
           . $sugarcube_variety );
 
@@ -3228,6 +3396,42 @@ sub buildMIPReq {
               . $sugarcube_artist
               . $sugarcube_style
               . $sugarcube_variety );
+    }
+    elsif ( $sugarcube_mix_type == 4 ) {    # Mood Mixing
+        my $sugarcube_mood = $prefs->client($client)->get('sugarcube_mood');
+        if ( $sugarcube_mood eq '0' || $sugarcube_mood eq '(None)' ) {
+            $log->debug("Mood Mixing but mood is set to NONE\n");
+        }
+        else {
+            my $myos = Slim::Utils::OSDetect::OS();
+            if ( $myos eq 'win' || $myos eq 'mac' ) {
+                $sugarcube_mood = URI::Escape::uri_escape($sugarcube_mood);
+            }
+            else {
+                $sugarcube_mood = Slim::Utils::Misc::escape($sugarcube_mood);
+            }
+            $log->debug("Mood Mixing Using:$sugarcube_mood\n");
+            $mypageurl = $mypageurl . '&mood=' . $sugarcube_mood;
+        }
+
+        my $sugarcube_mood_filter =
+          $prefs->client($client)->get('sugarcube_mood_filter');
+        if ( $sugarcube_mood_filter eq '0' || $sugarcube_mood_filter eq '(None)' ) {
+            $log->debug("Mood Mixing: no additional filter set\n");
+        }
+        else {
+            my $myos = Slim::Utils::OSDetect::OS();
+            if ( $myos eq 'win' || $myos eq 'mac' ) {
+                $sugarcube_mood_filter =
+                  URI::Escape::uri_escape($sugarcube_mood_filter);
+            }
+            else {
+                $sugarcube_mood_filter =
+                  Slim::Utils::Misc::escape($sugarcube_mood_filter);
+            }
+            $log->debug("Mood Mixing Using Filter:$sugarcube_mood_filter\n");
+            $mypageurl = $mypageurl . '&filter=' . $sugarcube_mood_filter;
+        }
     }
     my $sugarcube_receipes =
       '&recipe=' . $prefs->client($client)->get('sugarcube_receipes');
@@ -3470,15 +3674,19 @@ sub dupper {
 
 # Set up Async HTTP request
 sub SendtoMIPAsync {
-    my $client    = shift;
-    my $mypageurl = shift;
-    my $http      = Slim::Networking::SimpleAsyncHTTP->new(
+    my $client     = shift;
+    my $mypageurl  = shift;
+    my $avoidurl   = shift;
+    my $insertnext = shift;
+    my $http       = Slim::Networking::SimpleAsyncHTTP->new(
         \&gotMIP,
         \&gotErrorViaHTTP,
         {
             caller     => 'Spicefly',
             callerProc => \&SendtoMIPAsync,
             client     => $client,
+            avoidurl   => $avoidurl,
+            insertnext => $insertnext,
             timeout    => 60
         }
     );
@@ -3490,13 +3698,20 @@ sub SendtoMIPAsync {
 sub addtrack {
     my $client = shift;
     my $track  = shift;
+    my $mode   = shift || 'add';    # 'add' (append) or 'insert' (right after current)
     my $sugarcube_trackcount =
       $prefs->client($client)->get('sugarcube_trackcount');
     $sugarcube_trackcount++;
     $prefs->client($client)
       ->set( 'sugarcube_trackcount', "$sugarcube_trackcount" );
     if ( $track ne "" ) {
-        my $request = $client->execute( [ "playlist", "add", $track ] );
+        my $request;
+        if ( $mode eq 'insert' ) {
+            $request = $client->execute( [ "playlist", "insert", $track ] );
+        }
+        else {
+            $request = $client->execute( [ "playlist", "add", $track ] );
+        }
         $request->source('PLUGIN_SUGARCUBE');
     }
 }
@@ -3939,57 +4154,12 @@ sub AutoStartMix {
     my $request = $client->execute( [ 'playlist', 'clear' ] );
     $request->source('PLUGIN_SUGARCUBE');
 
-    my $sugarcube_activefilter;
-    my $scalarm_genre = $prefs->client($client)->get('scalarm_genre');
-    my $sugarport     = $prefs->get('sugarport');
-    my $miphosturl    = $prefs->get('miphosturl');
-    my $sugarmipsize  = $prefs->get('sugarmipsize');
-
-    my $mypageurl =
-      (     'http://'
-          . $miphosturl . ':'
-          . $sugarport
-          . '/api/mix?&sizetype=tracks&size='
-          . $sugarmipsize );
-
-    my $sugarcube_alarm_type =
-      $prefs->client($client)->get('sugarcube_alarm_type')
-      ;    # 0 is filter 1 is genre
-
-    if ( $sugarcube_alarm_type == 0 ) {    # Filter Mode
-        $sugarcube_activefilter =
-          $prefs->client($client)->get('scalarm_filter');
-        if (   $sugarcube_activefilter eq '0'
-            || $sugarcube_activefilter eq '(None)' )
-        {
-            $log->debug("Alarm Filter is not set\n");
-            $sugarcube_activefilter = '';
-        }
-        else {
-            my $myos = Slim::Utils::OSDetect::OS();
-            if ( $myos eq 'win' || $myos eq 'mac' ) {
-                $sugarcube_activefilter =
-                  URI::Escape::uri_escape($sugarcube_activefilter);
-            }
-            else {
-                $sugarcube_activefilter =
-                  Slim::Utils::Misc::escape($sugarcube_activefilter);
-            }
-            $mypageurl = ( $mypageurl . '&filter=' . $sugarcube_activefilter );
-        }
-    }
-    else {    # Genre Mode
-        $sugarcube_activefilter = $prefs->client($client)->get('scalarm_genre');
-
-        if (   $sugarcube_activefilter eq '0'
-            || $sugarcube_activefilter eq '(None)' )
-        {
-            $log->debug("Genre Filter is not set\n");
-        }
-        else {
-            $mypageurl = ( $mypageurl . '&filter=' . $sugarcube_activefilter );
-        }
-    }
+    # Reuse the same mix-building logic as the main SugarCube Mix Type
+    # (Filter/Genre/Artist/Mood/Recipe), so a fresh Auto Mix automatically
+    # follows whatever is already configured, instead of requiring a
+    # separate "Auto Mix and Alarm Clock Settings" filter/genre/mood to be
+    # set up on top of it.
+    my $mypageurl = buildMIPReq( $client, '' );
 
     my $http = Slim::Networking::SimpleAsyncHTTP->new(
         \&gotMIP,
@@ -3998,6 +4168,53 @@ sub AutoStartMix {
             caller     => 'SpiceflyAutoMix',
             callerProc => \&AutoStartMix,
             client     => $client,
+            timeout    => 60
+        }
+    );
+    $http->get($mypageurl);
+}
+
+sub ReplaceKickoffTrack {
+
+    # Replace the "kick off" (currently playing) track. If the playlist
+    # is empty there's nothing to swap, so bootstrap it the same way
+    # AutoStartMix does. Otherwise leave anything already queued after
+    # the current track alone - gotMIP() will insert the new track right
+    # after current, jump to it and drop the old one.
+    my $client = shift;
+
+    if ( Slim::Player::Playlist::count($client) == 0 ) {
+        AutoStartMix($client);
+        return;
+    }
+
+    # Register the currently playing track in TrackTracker before asking
+    # for its replacement - same reasoning as SugarCubeReplaceNext: without
+    # this, a seedless request can hand back the exact track we're trying
+    # to get rid of. gotMIP() compares candidates against avoidurl as a
+    # plain decoded filesystem path (matching WorkingSet.temptrack's
+    # format), not as a file:// URL, so convert it the same way kickoff()
+    # already does for its own seed-track registration.
+    my $kickoffsongurl = Slim::Player::Playlist::url($client);
+    my $kickoffurl;
+    if ($kickoffsongurl) {
+        my $kickofftrack = Slim::Utils::Misc::pathFromFileURL($kickoffsongurl);
+        $kickofftrack = dirtyencoder($kickofftrack);
+        $kickoffurl   = $kickofftrack;
+        Plugins::SugarCube::Breakout::TrackTracker( $client, $kickofftrack )
+          if length $kickofftrack;
+    }
+
+    my $mypageurl = buildMIPReq( $client, '' );
+
+    my $http = Slim::Networking::SimpleAsyncHTTP->new(
+        \&gotMIP,
+        \&gotErrorViaHTTP,
+        {
+            caller     => 'SpiceflyReplaceKickoff',
+            callerProc => \&ReplaceKickoffTrack,
+            client     => $client,
+            avoidurl   => $kickoffurl,
             timeout    => 60
         }
     );
@@ -4142,6 +4359,44 @@ sub AlarmFired {
         }
     }
 
+    if ( $sugarcube_alarm_type == 2 ) {    # Mood Mode
+        my $scalarm_mood = $prefs->client($client)->get('scalarm_mood');
+        if ( $scalarm_mood eq '0' || $scalarm_mood eq '(None)' ) {
+            $log->debug("Alarm Mood is not set\n");
+        }
+        else {
+            my $myos = Slim::Utils::OSDetect::OS();
+            if ( $myos eq 'win' || $myos eq 'mac' ) {
+                $scalarm_mood = URI::Escape::uri_escape($scalarm_mood);
+            }
+            else {
+                $scalarm_mood = Slim::Utils::Misc::escape($scalarm_mood);
+            }
+            $mypageurl = ( $mypageurl . '&mood=' . $scalarm_mood );
+        }
+
+        my $scalarm_filter_for_mood =
+          $prefs->client($client)->get('scalarm_filter');
+        if (   $scalarm_filter_for_mood eq '0'
+            || $scalarm_filter_for_mood eq '(None)' )
+        {
+            $log->debug("Alarm Mood: no additional filter set\n");
+        }
+        else {
+            my $myos = Slim::Utils::OSDetect::OS();
+            if ( $myos eq 'win' || $myos eq 'mac' ) {
+                $scalarm_filter_for_mood =
+                  URI::Escape::uri_escape($scalarm_filter_for_mood);
+            }
+            else {
+                $scalarm_filter_for_mood =
+                  Slim::Utils::Misc::escape($scalarm_filter_for_mood);
+            }
+            $mypageurl =
+              ( $mypageurl . '&filter=' . $scalarm_filter_for_mood );
+        }
+    }
+
     $log->debug("Alarm URL created; $mypageurl\n");
 
     my $http = Slim::Networking::SimpleAsyncHTTP->new(
@@ -4186,6 +4441,8 @@ sub webPages {
         { 'PLUGIN_SUGARCUBEHIS' => $htmlTemplate } );
     Slim::Web::Pages->addPageLinks( "browseiPeng",
         { 'PLUGIN_SUGARCUBEQP' => $htmlQuickPlay } );
+    Slim::Web::Pages->addPageLinks( "browseiPeng",
+        { 'PLUGIN_SUGARCUBEQS' => $htmlQuickSettings } );
 
     Slim::Web::Pages->addPageLinks( "browse",
         { 'PLUGIN_SUGARCUBELV' => $htmlTemplateLV } );
@@ -4226,10 +4483,24 @@ sub webPages {
         \&handleWebQP );
     Slim::Web::HTTP::CSRF->protectURI("$urlBase/quickplay.html");
 
+    Slim::Web::Pages->addPageLinks( "browse",
+        { 'PLUGIN_SUGARCUBEQS' => $htmlQuickSettings } );
+    Slim::Web::Pages->addPageLinks(
+        "icons",
+        {
+            'PLUGIN_SUGARCUBEQS' =>
+              'plugins/SugarCube/HTML/images/sugarcube.png'
+        }
+    );
+    Slim::Web::Pages->addPageFunction( "$urlBase/quicksettings.html",
+        \&handleWebQuickSettings );
+    Slim::Web::HTTP::CSRF->protectURI("$urlBase/quicksettings.html");
+
     if ( UNIVERSAL::can( "Slim::Plugin::Base", "addWeight" ) ) {
         Slim::Plugin::Base->addWeight( "PLUGIN_SUGARCUBELV",  $sugarlvweight );
         Slim::Plugin::Base->addWeight( "PLUGIN_SUGARCUBEHIS", $sugarhisweight );
         Slim::Plugin::Base->addWeight( "PLUGIN_SUGARCUBEQP",  $sugarhisweight );
+        Slim::Plugin::Base->addWeight( "PLUGIN_SUGARCUBEQS",  $sugarhisweight );
     }
 }
 
@@ -4237,8 +4508,192 @@ sub handleWebQP {
     my ( $client, $params ) = @_;
     $client = Slim::Player::Client::getClient( $params->{player} );
     if ($client) {
-        mixfromplaying( $client, "yes" );
+        if ( $params->{'forcereplacekickoff'} ) {
+
+            # "New Track" button - replace the kick off track only,
+            # leaving anything already queued after it untouched.
+            ReplaceKickoffTrack($client);
+        }
+        elsif ( $params->{'forcereplace'} ) {
+
+            # "Replace Next Track" button.
+            SugarCubeReplaceNext($client);
+        }
+        else {
+            # First arrival on this page - start a fresh mix.
+            mixfromplaying( $client, "yes" );
+        }
         return Slim::Web::HTTP::filltemplatefile( $htmlQuickPlay, $params );
+    }
+}
+
+sub handleWebQuickSettings {
+    my ( $client, $params ) = @_;
+    $client = Slim::Player::Client::getClient( $params->{player} );
+    if ($client) {
+        my $saved   = 0;
+        my $replace = 0;
+
+        if ( defined( $params->{'sugarcube_mix_type'} ) ) {
+            $prefs->client($client)
+              ->set( 'sugarcube_mix_type', $params->{'sugarcube_mix_type'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_filteractive'} ) ) {
+            my $oldval =
+              $prefs->client($client)->get('sugarcube_filteractive');
+            if ( !defined($oldval)
+                || $oldval ne $params->{'sugarcube_filteractive'} )
+            {
+                $replace = 1;
+            }
+            $prefs->client($client)->set( 'sugarcube_filteractive',
+                $params->{'sugarcube_filteractive'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_genre'} ) ) {
+            my $oldval = $prefs->client($client)->get('sugarcube_genre');
+            if ( !defined($oldval) || $oldval ne $params->{'sugarcube_genre'} )
+            {
+                $replace = 1;
+            }
+            $prefs->client($client)
+              ->set( 'sugarcube_genre', $params->{'sugarcube_genre'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_artist'} ) ) {
+            my $oldval = $prefs->client($client)->get('sugarcube_artist');
+            if ( !defined($oldval)
+                || $oldval ne $params->{'sugarcube_artist'} )
+            {
+                $replace = 1;
+            }
+            $prefs->client($client)
+              ->set( 'sugarcube_artist', $params->{'sugarcube_artist'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_mood'} ) ) {
+            my $oldval = $prefs->client($client)->get('sugarcube_mood');
+            if ( !defined($oldval) || $oldval ne $params->{'sugarcube_mood'} )
+            {
+                $replace = 1;
+            }
+            $prefs->client($client)
+              ->set( 'sugarcube_mood', $params->{'sugarcube_mood'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_mood_filter'} ) ) {
+            my $oldval =
+              $prefs->client($client)->get('sugarcube_mood_filter');
+            if ( !defined($oldval)
+                || $oldval ne $params->{'sugarcube_mood_filter'} )
+            {
+                $replace = 1;
+            }
+            $prefs->client($client)->set( 'sugarcube_mood_filter',
+                $params->{'sugarcube_mood_filter'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_style'} ) ) {
+            $prefs->client($client)
+              ->set( 'sugarcube_style', $params->{'sugarcube_style'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_variety'} ) ) {
+            $prefs->client($client)
+              ->set( 'sugarcube_variety', $params->{'sugarcube_variety'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_album_song'} ) ) {
+            $prefs->client($client)->set( 'sugarcube_album_song',
+                $params->{'sugarcube_album_song'} );
+            $saved = 1;
+        }
+        if ( defined( $params->{'sugarcube_receipes'} ) ) {
+            my $oldval = $prefs->client($client)->get('sugarcube_receipes');
+            if ( !defined($oldval)
+                || $oldval ne $params->{'sugarcube_receipes'} )
+            {
+                $replace = 1;
+            }
+            $prefs->client($client)
+              ->set( 'sugarcube_receipes', $params->{'sugarcube_receipes'} );
+            $saved = 1;
+        }
+
+        if ( $params->{'forcereplace'} ) {
+            $replace = 1;
+        }
+
+        if ( $replace || $params->{'forcereplacekickoff'} ) {
+
+            # If playback has stalled (eg. after a server restart with an
+            # empty buffer) the normal kickoff() flow only ever appends
+            # tracks without anything consuming them, so the playlist
+            # just keeps growing every time a setting changes. Make sure
+            # playback is actually running before queueing anything.
+            my $playstatus = Slim::Player::Source::playmode($client);
+            if ( $playstatus ne 'play' ) {
+                my $request = $client->execute( ['play'] );
+                $request->source('PLUGIN_SUGARCUBE');
+            }
+        }
+
+        my $replacedempty  = 0;
+        my $replacekickoff = 0;
+        if ( $params->{'forcereplacekickoff'} ) {
+
+            # Replace the "kick off" track itself, leaving anything
+            # already queued after it (eg. "Coming Up Next") untouched.
+            # $replacedempty here reflects whether the playlist was
+            # genuinely empty (a fresh mix was bootstrapped), so the
+            # status message can say "starting a new mix" rather than
+            # "replacing the current track" when nothing was actually
+            # replaced.
+            $replacedempty = 1
+              if Slim::Player::Playlist::count($client) == 0;
+            ReplaceKickoffTrack($client);
+            $replace        = 1;
+            $replacekickoff = 1;
+        }
+        elsif ($replace) {
+            $replacedempty = 1
+              if Slim::Player::Playlist::count($client) == 0;
+            SugarCubeReplaceNext($client);
+        }
+
+        $params->{'saved'}          = $saved;
+        $params->{'replace'}        = $replace;
+        $params->{'replacedempty'}  = $replacedempty;
+        $params->{'replacekickoff'} = $replacekickoff;
+        $params->{'prefs'}->{'sugarcube_mix_type'} =
+          $prefs->client($client)->get('sugarcube_mix_type');
+        $params->{'prefs'}->{'sugarcube_filteractive'} =
+          $prefs->client($client)->get('sugarcube_filteractive');
+        $params->{'prefs'}->{'sugarcube_genre'} =
+          $prefs->client($client)->get('sugarcube_genre');
+        $params->{'prefs'}->{'sugarcube_artist'} =
+          $prefs->client($client)->get('sugarcube_artist');
+        $params->{'prefs'}->{'sugarcube_mood'} =
+          $prefs->client($client)->get('sugarcube_mood');
+        $params->{'prefs'}->{'sugarcube_mood_filter'} =
+          $prefs->client($client)->get('sugarcube_mood_filter');
+        $params->{'prefs'}->{'sugarcube_style'} =
+          $prefs->client($client)->get('sugarcube_style');
+        $params->{'prefs'}->{'sugarcube_variety'} =
+          $prefs->client($client)->get('sugarcube_variety');
+        $params->{'prefs'}->{'sugarcube_album_song'} =
+          $prefs->client($client)->get('sugarcube_album_song');
+        $params->{'prefs'}->{'sugarcube_receipes'} =
+          $prefs->client($client)->get('sugarcube_receipes');
+
+        $params->{'filters'}  = Plugins::SugarCube::PlayerSettings::getFilterList();
+        $params->{'genres'}   = Plugins::SugarCube::PlayerSettings::getGenresList();
+        $params->{'artists'}  = Plugins::SugarCube::PlayerSettings::getArtistsList();
+        $params->{'moods'}    = Plugins::SugarCube::PlayerSettings::getMoodsList();
+        $params->{'receipes'} = Plugins::SugarCube::PlayerSettings::getReceipesList();
+
+        return Slim::Web::HTTP::filltemplatefile( $htmlQuickSettings, $params );
     }
 }
 
@@ -4593,6 +5048,14 @@ sub handleWebList {
                 if ( $sugarcube_artist eq '0' ) {
                     $params->{'mixstatus'} =
 "CONFIGURATION ERROR: Select Mix Type by Artist: No Artist is specified";
+                }
+            }
+            elsif ( $sugarcube_mix_type == 4 ) {    # Mood Mixing
+                my $sugarcube_mood =
+                  $prefs->client($client)->get('sugarcube_mood');
+                if ( $sugarcube_mood eq '0' ) {
+                    $params->{'mixstatus'} =
+"CONFIGURATION ERROR: Select Mix Type by Mood: No Mood is specified";
                 }
             }
 

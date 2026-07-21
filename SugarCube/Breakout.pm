@@ -1779,14 +1779,18 @@ sub DropGenreAndXMas {
     if ( ( $sugarxmas == 1 ) && ( $theTime ne 'Dec' ) ) {
 
         #	$log->debug("Christmas Block Active\n" );
+        # Note: parentheses around the OR'd genre checks are required -
+        # without them, SQL's AND-before-OR precedence means "AND
+        # WorkingSet.client = $clientid" only binds to the last OR term,
+        # so the first genre checks would run across ALL clients.
         $sth = $dbh->prepare(
-"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDGENRE' WHERE WorkingSet.SCgenres = $scblockgenre_always OR WorkingSet.SCgenres = $scblockgenre_alwaystwo OR WorkingSet.SCgenres = $scblockgenre_alwaysthree OR upper(WorkingSet.SCgenres) = 'XMAS' OR upper(WorkingSet.SCgenres) = 'CHRISTMAS' AND WorkingSet.client = $clientid"
+"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDGENRE' WHERE (WorkingSet.SCgenres = $scblockgenre_always OR WorkingSet.SCgenres = $scblockgenre_alwaystwo OR WorkingSet.SCgenres = $scblockgenre_alwaysthree OR upper(WorkingSet.SCgenres) = 'XMAS' OR upper(WorkingSet.SCgenres) = 'CHRISTMAS') AND WorkingSet.client = $clientid"
         );
         $sth->execute() || die "Could not execute: " . $dbh->errstr;
     }
     else {
         $sth = $dbh->prepare(
-"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDGENRE' WHERE WorkingSet.SCgenres = $scblockgenre_always OR WorkingSet.SCgenres = $scblockgenre_alwaystwo OR WorkingSet.SCgenres = $scblockgenre_alwaysthree AND WorkingSet.client = $clientid"
+"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDGENRE' WHERE (WorkingSet.SCgenres = $scblockgenre_always OR WorkingSet.SCgenres = $scblockgenre_alwaystwo OR WorkingSet.SCgenres = $scblockgenre_alwaysthree) AND WorkingSet.client = $clientid"
         );
         $sth->execute() || die "Could not execute: " . $dbh->errstr;
     }
