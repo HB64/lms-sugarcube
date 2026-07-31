@@ -1,0 +1,279 @@
+[% pagetitle = 'PLUGIN_SUGARCUBEQS' | string; pageicon = 'PLUGIN_SUGARCUBEQS' %]
+[%- pwd_list = BLOCK -%]/
+	<a href="[% webroot %][% path %]?player=[% player | uri %][% statisticparameters %]">
+		[% "PLUGIN_SUGARCUBEQS" | string %]
+	</a>
+[% END -%]
+[%- pageHeaderInfo = BLOCK %]
+
+[% END -%]
+[% PROCESS pageheader.html %]
+
+<style type="text/css">
+	.sc-info-wrap { position:relative; display:inline-block; }
+	.sc-info-icon { cursor:pointer; opacity:0.7; padding-left:8px; }
+	.sc-info-popover {
+		display:none; position:absolute; z-index:1000; top:100%; left:0; margin-top:6px;
+		width:300px; max-width:80vw; background:#2b2b2b; color:#fff;
+		border-radius:8px; padding:16px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+		font-size:0.85em; line-height:1.4;
+	}
+	.sc-info-popover button {
+		background:none; border:1px solid #9c9; color:#9c9; border-radius:16px;
+		padding:6px 16px; cursor:pointer; float:right; margin-top:12px;
+	}
+</style>
+<script type="text/javascript">
+	function scToggleInfo(el) {
+		var pop = el.nextElementSibling;
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p !== pop) { p.style.display = 'none'; }
+		});
+		pop.style.display = (pop.style.display === 'block') ? 'none' : 'block';
+	}
+	// Auto-return after a while if left idle - matches the behaviour of
+	// the SugarCube Auto Mix quickplay page.
+	function scGoBack() {
+		try {
+			var btns = window.parent.document.querySelectorAll('.v-dialog--fullscreen button.v-btn--icon');
+			if (btns.length > 1) {
+				btns[1].click();
+				return;
+			}
+		} catch (e) {}
+		window.location.href = "[% webroot %]";
+	}
+	setTimeout(scGoBack, 60000);
+</script>
+
+<div style="padding:15px;">
+
+	[% IF saved %]
+	<div style="padding:0 0 15px 0; color:#9fd88a;">[% "PLUGIN_SC_WEB_QS_SAVED" | string %]</div>
+	[% END %]
+
+	[% IF replace %]
+	<div id="sc-replace-msg" style="padding:0 0 4px 0; font-weight:bold;">
+	[% IF replacedempty %][% "PLUGIN_SC_WEB_QS_STARTING" | string %][% ELSIF replacekickoff %][% "PLUGIN_SC_WEB_QS_REPLACING_CURRENT" | string %][% ELSE %][% "PLUGIN_SC_WEB_QS_REPLACING" | string %][% END %]
+	</div>
+	[% END %]
+
+	<div id="sc-np-empty-wrap" style="display:none; padding:0 0 20px 0;">
+		<div style="font-weight:bold; padding:0 0 10px 0;">[% "PLUGIN_SUGARCUBEQP" | string %]</div>
+		<button type="button" onclick="window.location.href='[% webroot %][% path %]?player=[% player | uri %]&forcereplacekickoff=1'" style="padding:8px 16px; cursor:pointer;">[% "PLUGIN_SC_WEB_QS_STARTMIX" | string %]</button>
+		<span class="sc-info-wrap">
+			<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+			<div class="sc-info-popover">
+				[% "PLUGIN_SC_WEB_VARIETY_INFO" | string %]
+				<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+				<div style="clear:both;"></div>
+			</div>
+		</span>
+	</div>
+
+	<div id="sc-np-cur-wrap" style="display:none; align-items:center; gap:14px; padding:0 0 12px 0;">
+		<img id="sc-np-cur-art" src="" style="width:56px; height:56px; border-radius:6px; object-fit:cover; background:#222;" alt="">
+		<div>
+			<div style="opacity:0.6; font-size:0.8em;">[% "PLUGIN_SUGARCUBE_PLAYING" | string %]</div>
+			<div id="sc-np-cur-title" style="font-weight:bold;"></div>
+			<div id="sc-np-cur-artist" style="opacity:0.75; font-size:0.9em;"></div>
+		</div>
+	</div>
+	<div id="sc-np-cur-btn-wrap" style="display:none; padding:0 0 20px 0;">
+		<button type="button" onclick="window.location.href='[% webroot %][% path %]?player=[% player | uri %]&forcereplacekickoff=1'" style="padding:8px 16px; cursor:pointer;">[% "PLUGIN_SC_WEB_QS_REPLACEAGAIN" | string %]</button>
+		<span class="sc-info-wrap">
+			<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+			<div class="sc-info-popover">
+				[% "PLUGIN_SC_WEB_VARIETY_INFO" | string %]
+				<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+				<div style="clear:both;"></div>
+			</div>
+		</span>
+	</div>
+
+	<div id="sc-np-next-wrap" style="display:none; align-items:center; gap:14px; padding:0 0 12px 0;">
+		<img id="sc-np-next-art" src="" style="width:56px; height:56px; border-radius:6px; object-fit:cover; background:#222;" alt="">
+		<div>
+			<div style="opacity:0.6; font-size:0.8em;">[% "PLUGIN_SUGARCUBE_UPNEXT" | string %]</div>
+			<div id="sc-np-next-title" style="font-weight:bold;"></div>
+			<div id="sc-np-next-artist" style="opacity:0.75; font-size:0.9em;"></div>
+		</div>
+	</div>
+	<div id="sc-np-next-btn-wrap" style="display:none; padding:0 0 20px 0;">
+		<button type="button" onclick="window.location.href='[% webroot %][% path %]?player=[% player | uri %]&forcereplace=1'" style="padding:8px 16px; cursor:pointer;">[% "PLUGIN_SC_WEB_QS_REPLACEAGAIN" | string %]</button>
+		<span class="sc-info-wrap">
+			<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+			<div class="sc-info-popover">
+				[% "PLUGIN_SC_WEB_VARIETY_INFO" | string %]
+				<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+				<div style="clear:both;"></div>
+			</div>
+		</span>
+	</div>
+
+	<script type="text/javascript">
+		(function() {
+			var scPlayerId = "[% player %]";
+
+			function fillTrackSlot(prefix, t) {
+				var artEl = document.getElementById(prefix + '-art');
+				var titleEl = document.getElementById(prefix + '-title');
+				var artistEl = document.getElementById(prefix + '-artist');
+				if (t.title) { titleEl.textContent = t.title; }
+				if (t.artist) { artistEl.textContent = t.artist; }
+				if (t.artwork_url) {
+					artEl.src = t.artwork_url;
+				} else if (t.coverid) {
+					artEl.src = "/music/" + t.coverid + "/cover_100x100.jpg";
+				}
+			}
+			function scShowTracks() {
+				try {
+					var xhr = new XMLHttpRequest();
+					xhr.open('POST', '/jsonrpc.js', true);
+					xhr.setRequestHeader('Content-Type', 'application/json');
+					xhr.onload = function() {
+						try {
+							var data = JSON.parse(xhr.responseText);
+							var loop = data && data.result && data.result.playlist_loop;
+							if (loop && loop.length) {
+								document.getElementById('sc-np-empty-wrap').style.display = 'none';
+								fillTrackSlot('sc-np-cur', loop[0]);
+								document.getElementById('sc-np-cur-wrap').style.display = 'flex';
+								document.getElementById('sc-np-cur-btn-wrap').style.display = 'block';
+								if (loop.length > 1) {
+									fillTrackSlot('sc-np-next', loop[1]);
+									document.getElementById('sc-np-next-wrap').style.display = 'flex';
+									document.getElementById('sc-np-next-btn-wrap').style.display = 'block';
+								}
+							} else {
+								document.getElementById('sc-np-empty-wrap').style.display = 'block';
+								document.getElementById('sc-np-cur-wrap').style.display = 'none';
+								document.getElementById('sc-np-cur-btn-wrap').style.display = 'none';
+								document.getElementById('sc-np-next-wrap').style.display = 'none';
+								document.getElementById('sc-np-next-btn-wrap').style.display = 'none';
+							}
+						} catch (e) {}
+					};
+					xhr.send(JSON.stringify({
+						id: 1,
+						method: "slim.request",
+						params: [scPlayerId, ["status", "-", 2, "tags:acdlKN"]]
+					}));
+				} catch (e) {}
+			}
+			// Immediate for the normal "just show what's playing" case, plus
+			// staggered retries to catch up once a replace's async MIP
+			// request lands.
+			scShowTracks();
+			setTimeout(scShowTracks, 900);
+			setTimeout(scShowTracks, 2200);
+			setTimeout(scShowTracks, 4500);
+		})();
+	</script>
+
+	<form method="get" action="[% webroot %][% path %]">
+		<input type="hidden" name="player" value="[% player %]">
+
+		<details>
+			<summary style="cursor:pointer; font-weight:bold; padding:8px 0;">[% "PLUGIN_SC_WEB_MIP_SETTINGS" | string %]</summary>
+
+			<div style="padding:10px 0;">
+				<label class="stdlabel" for="sugarcube_style">[% "PLUGIN_SC_WEB_STYLE" | string %]</label>
+				<span id="sugarcube_style_val">[% prefs.sugarcube_style %]</span><br>
+				<input type="range" min="0" max="200" step="1" class="stdedit" name="sugarcube_style" id="sugarcube_style" value="[% prefs.sugarcube_style %]" style="width:100%;" oninput="document.getElementById('sugarcube_style_val').textContent=this.value" onchange="this.form.submit()">
+			</div>
+
+			<div style="padding:10px 0;">
+				<label class="stdlabel" for="sugarcube_variety">[% "PLUGIN_SC_WEB_VARIETY" | string %]</label>
+				<span id="sugarcube_variety_val">[% prefs.sugarcube_variety %]</span><br>
+				<input type="range" min="0" max="9" step="1" class="stdedit" name="sugarcube_variety" id="sugarcube_variety" value="[% prefs.sugarcube_variety %]" style="width:100%;" oninput="document.getElementById('sugarcube_variety_val').textContent=this.value" onchange="this.form.submit()">
+			</div>
+		</details>
+
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_album_song">[% "PLUGIN_SC_WEB_MIX_SONG_ALBUM" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_album_song" id="sugarcube_album_song" onchange="this.form.submit()">
+				<option [% IF prefs.sugarcube_album_song == 0 %]selected [% END %]value="0">[% 'Album' | getstring %]</option>
+				<option [% IF prefs.sugarcube_album_song == 1 %]selected [% END %]value="1">[% 'Song' | getstring %]</option>
+			</select>
+		</div>
+
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_mix_type">[% "PLUGIN_SC_WEB_MIXTYPE" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_mix_type" id="sugarcube_mix_type" onchange="this.form.submit()">
+				<option [% IF prefs.sugarcube_mix_type == 0 %]selected [% END %]value="0">[% '(None)' | getstring %]</option>
+				<option [% IF prefs.sugarcube_mix_type == 1 %]selected [% END %]value="1">[% 'Filter Mixing' | getstring %]</option>
+				<option [% IF prefs.sugarcube_mix_type == 2 %]selected [% END %]value="2">[% 'Genre Mixing' | getstring %]</option>
+				<option [% IF prefs.sugarcube_mix_type == 3 %]selected [% END %]value="3">[% 'Artist Mixing' | getstring %]</option>
+				<option [% IF prefs.sugarcube_mix_type == 4 %]selected [% END %]value="4">[% 'Mood Mixing' | getstring %]</option>
+			</select>
+		</div>
+
+		[% IF prefs.sugarcube_mix_type == 3 %]
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_artist">[% "PLUGIN_SC_WEB_ARTISTS" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_artist" id="sugarcube_artist" onchange="this.form.submit()">
+			[% FOREACH option IN artists.keys.sort %]
+				<option [% IF prefs.sugarcube_artist == option %]selected [% END %]value="[% option %]">[% artists.$option %]</option>
+			[%- END -%]
+			</select>
+		</div>
+		[% END %]
+
+		[% IF prefs.sugarcube_mix_type == 2 %]
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_genre">[% "PLUGIN_SC_WEB_GENRE" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_genre" id="sugarcube_genre" onchange="this.form.submit()">
+			[% FOREACH option IN genres.keys.sort %]
+				<option [% IF prefs.sugarcube_genre == option %]selected [% END %]value="[% option %]">[% genres.$option %]</option>
+			[%- END -%]
+			</select>
+		</div>
+		[% END %]
+
+		[% IF prefs.sugarcube_mix_type == 1 %]
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_filteractive">[% "PLUGIN_SC_WEB_FILTER" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_filteractive" id="sugarcube_filteractive" onchange="this.form.submit()">
+			[% FOREACH option IN filters.keys.sort %]
+				<option [% IF prefs.sugarcube_filteractive == option %]selected [% END %]value="[% option %]">[% filters.$option %]</option>
+			[%- END -%]
+			</select>
+		</div>
+		[% END %]
+
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_receipes">[% "PLUGIN_SC_WEB_RECIPE" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_receipes" id="sugarcube_receipes" onchange="this.form.submit()">
+			[% FOREACH option IN receipes.keys.sort %]
+				<option [% IF prefs.sugarcube_receipes == option %]selected [% END %]value="[% option %]">[% receipes.$option %]</option>
+			[%- END -%]
+			</select>
+		</div>
+
+		[% IF prefs.sugarcube_mix_type == 4 %]
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_mood">[% "PLUGIN_SC_WEB_MOOD" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_mood" id="sugarcube_mood" onchange="this.form.submit()">
+			[% FOREACH option IN moods.keys.sort %]
+				<option [% IF prefs.sugarcube_mood == option %]selected [% END %]value="[% option %]">[% moods.$option %]</option>
+			[%- END -%]
+			</select>
+		</div>
+
+		<div style="padding:10px 0;">
+			<label class="stdlabel" for="sugarcube_mood_filter">[% "PLUGIN_SC_WEB_MOOD_FILTER" | string %]</label><br>
+			<select class="stdedit" name="sugarcube_mood_filter" id="sugarcube_mood_filter" onchange="this.form.submit()">
+			[% FOREACH option IN filters.keys.sort %]
+				<option [% IF prefs.sugarcube_mood_filter == option %]selected [% END %]value="[% option %]">[% filters.$option %]</option>
+			[%- END -%]
+			</select>
+		</div>
+		[% END %]
+
+		<noscript><button type="submit">[% "PLUGIN_SC_WEB_QS_APPLY" | string %]</button></noscript>
+	</form>
+</div>
+
+[% PROCESS pagefooter.html %]
