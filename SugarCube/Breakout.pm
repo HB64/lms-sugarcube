@@ -520,6 +520,7 @@ sub getmyTSNextSong {
             'url' => $url,
         }
     );
+    return unless $track;
     my $trackid = $track->id;
 
 	my $table = ($apc_enabled && $prefs->get('useapcvalues')) ? 'alternativeplaycount' : 'tracks_persistent';
@@ -647,6 +648,7 @@ sub getmyNextSong {
             'url' => $url,
         }
     );
+    return unless $track;
     my $trackid = $track->id;
 
     my $dbh           = Slim::Schema->storage->dbh();
@@ -1863,7 +1865,7 @@ sub DropArtists {
         #	$log->debug("SugarCube Std Drop Artists\n");
         my $clientid = $dbh->quote( Slim::Player::Client::id($client) );
         $sth = $dbh->prepare(
-"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDARTIST' WHERE WorkingSet.SCartist = $scblockartist_always OR WorkingSet.SCartist = $scblockartist_alwaystwo OR WorkingSet.SCartist = $scblockartist_alwaysthree AND WorkingSet.client = $clientid"
+"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDARTIST' WHERE (WorkingSet.SCartist = $scblockartist_always OR WorkingSet.SCartist = $scblockartist_alwaystwo OR WorkingSet.SCartist = $scblockartist_alwaysthree) AND WorkingSet.client = $clientid"
         );
         $sth->execute() || die "Could not execute: " . $dbh->errstr;
         $sth = $dbh->prepare(
@@ -1876,7 +1878,7 @@ sub DropArtists {
         #	$log->debug("SugarCube GLOBAL Drop Artists\n");
         my $clientid = $dbh->quote( Slim::Player::Client::id($client) );
         $sth = $dbh->prepare(
-"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDARTIST' WHERE WorkingSet.SCartist = $scblockartist_always OR WorkingSet.SCartist = $scblockartist_alwaystwo OR WorkingSet.SCartist = $scblockartist_alwaysthree AND WorkingSet.client = $clientid"
+"UPDATE WorkingSet SET trackingno = 'DROPBLOCKEDARTIST' WHERE (WorkingSet.SCartist = $scblockartist_always OR WorkingSet.SCartist = $scblockartist_alwaystwo OR WorkingSet.SCartist = $scblockartist_alwaysthree) AND WorkingSet.client = $clientid"
         );
         $sth->execute() || die "Could not execute: " . $dbh->errstr;
         $sth = $dbh->prepare(

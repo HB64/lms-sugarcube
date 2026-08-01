@@ -2896,7 +2896,7 @@ sub randompuller {
       ; # CHECK WHETHER ASYNC WAS FROM ALARM or AUTOMIX - IF SO THEN DONT SAVE CURRENT TRACK
     $log->debug("\nLMS Reported Track Playing;\n$song\n");
 
-    if ( $song eq 'sugarcube:track' )
+    if ( !defined($song) || $song eq 'sugarcube:track' )
     { # Breakout if there is no currently playing track we can pull the genre from
         $song = "FAILED";
         $log->debug("\nNo Currently Playing Track to get Genre from\n");
@@ -4260,13 +4260,13 @@ sub ToggleVolume {
     if ( $item eq '{PLUGIN_SUGARCUBE_VOLUME_FADE_ON}' ) {
         $sugarcubevolume_flag = 0;
         $prefs->client($client)
-          ->set( 'sugarcubevolume_flag', "$sugarcubevolume_flag" );
+          ->set( 'sugarcube_volume_flag', "$sugarcubevolume_flag" );
         $line = $client->string('PLUGIN_SUGARCUBE_MENU_VOL_DISABLED');
     }
     else {
         $sugarcubevolume_flag = 1;
         $prefs->client($client)
-          ->set( 'sugarcubevolume_flag', "$sugarcubevolume_flag" );
+          ->set( 'sugarcube_volume_flag', "$sugarcubevolume_flag" );
         $line = $client->string('PLUGIN_SUGARCUBE_MENU_VOL_ENABLE');
     }
     $client->showBriefly(

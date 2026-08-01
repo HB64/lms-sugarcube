@@ -30,7 +30,7 @@ sub overridePlayback {
 		return undef;
 	}
 	$log->debug("ProtocolHandler; Firing");
-    Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 1, \&Plugins::SugarCube::Plugin::AlarmFired($client),);
+    Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 1, \&Plugins::SugarCube::Plugin::AlarmFired, $client);
 	return 1;
 }
 
