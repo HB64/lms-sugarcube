@@ -259,16 +259,16 @@ sub FSgetRealRandomSubsetYearRangeAny {
       $prefs->client($client)->get('sugarcube_startyear');
     my $sugarcube_endyear = $prefs->client($client)->get('sugarcube_endyear');
 
-    if ( $sugarcube_startyear eq "" ) {
+    if ( !defined($sugarcube_startyear) || $sugarcube_startyear eq "" ) {
         $sugarcube_startyear = "1900";
     }
-    if ( $sugarcube_endyear eq "" ) {
+    if ( !defined($sugarcube_endyear) || $sugarcube_endyear eq "" ) {
         $sugarcube_endyear = "2020";
     }
 
     my $sugarcube_filetype = $prefs->client($client)->get('sugarcube_filetype');
 
-    if ( $sugarcube_filetype eq "" ) {
+    if ( !defined($sugarcube_filetype) || $sugarcube_filetype eq "" ) {
         $sugarcube_filetype = 0;    # Default Anything
     }
 
@@ -279,7 +279,7 @@ sub FSgetRealRandomSubsetYearRangeAny {
     my $sugarcube_fs_length_high;
 
     # Select Tracks ...Normal 0 tracks.secs >= 0 AND tracks.secs <= 18000
-    if ( $sugarcube_fs_length eq "" || $sugarcube_fs_length == 0 ) {
+    if ( !defined($sugarcube_fs_length) || $sugarcube_fs_length eq "" || $sugarcube_fs_length == 0 ) {
         $sugarcube_fs_length_low  = '0';
         $sugarcube_fs_length_high = '18000';
 
