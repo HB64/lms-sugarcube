@@ -1,9 +1,9 @@
 # Changelog
 
-## 7.0.9.9 (2026-07-31)
+## 7.0.9.11 (2026-07-31)
 
 ### Fixed
-- Multi-player database: `AlbumTracker`, `ArtistTracker` and `TrackTracker` used a `UNIQUE` constraint on the value column alone instead of `(client, value)`, so `INSERT OR REPLACE` could silently steal a row from one player's client the moment another player played the same artist/album/track, causing that player to "forget" it. Existing databases are migrated automatically on plugin startup.
+- Multi-player database: `AlbumTracker`, `ArtistTracker` and `TrackTracker` used a `UNIQUE` constraint on the value column alone instead of `(client, value)`, so `INSERT OR REPLACE` could silently steal a row from one player's client the moment another player played the same artist/album/track, causing that player to "forget" it. Existing databases are migrated automatically on plugin startup; the pre-migration table is kept (as `old_AlbumTracker`/`old_ArtistTracker`/`old_TrackTracker`) instead of being dropped, so the original data isn't lost if anything looks wrong afterwards.
 - Multi-player database: the trim routines for `AlbumTracker`, `ArtistTracker`, `TrackTracker` and `History` counted rows per client but deleted the globally oldest row with no client filter, so one busy player's activity could evict a quieter player's tracked history.
 - `mystuff()` (the candidate pull used for track selection when no statistics sorting is active) had no `ORDER BY`, so SQLite could return rows in an undefined order instead of MIP's own acoustic-similarity ranking. Now explicitly sorted by `id ASC`.
 - Block Album Repeating slider could not be set to 0 (minimum was 1), even though the backend already treated 0 as "no blocking".

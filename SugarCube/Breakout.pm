@@ -819,6 +819,8 @@ sub init {
     # moment another player played the same artist/album/track, causing
     # cross-player "forgetting". CREATE TABLE IF NOT EXISTS above only
     # affects fresh installs, so existing databases are rebuilt here.
+    # The pre-migration table is kept around as old_$table (not dropped)
+    # so the original data isn't lost if anything looks wrong afterwards.
     for my $trackerdef (
         [ 'AlbumTracker',  'SCalbum' ],
         [ 'ArtistTracker', 'SCartist' ],
@@ -840,7 +842,6 @@ sub init {
             $dbh->do(
 "INSERT OR IGNORE INTO $table (id, client, $col) SELECT id, client, $col FROM old_$table"
             );
-            $dbh->do("DROP TABLE old_$table");
         }
     }
 
