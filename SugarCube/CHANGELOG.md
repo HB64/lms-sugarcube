@@ -5,6 +5,7 @@
 ### Fixed
 - Live View "Play Album" / "Add Album" / "Add Track" buttons did nothing: they relied on `SqueezeJS.Controller.urlRequest(...)`, a classic-skin JS framework no longer loaded by current Lyrion Music Server, so every click silently failed (`SqueezeJS is not defined`). Rewritten to POST directly to `/jsonrpc.js`, the same pattern already used by Quick Settings' live Now Playing/Coming Up Next display.
 - The player ID passed into that JSON-RPC call was reused from a variable already URL-encoded for query-string use (colons replaced with `%3A`), so even after the rewrite no player ever matched and the request silently failed. Now uses the raw, unencoded player ID for JSON-RPC calls.
+- History page "Play Album" button did nothing: same dead `SqueezeJS.Controller.urlRequest(...)` dependency as the Live View buttons above, plus it concatenated the raw player object reference into the URL instead of a player ID string, so it could never have worked. Rewritten to use the same direct JSON-RPC POST to `/jsonrpc.js` with the actual player ID.
 
 ### Changed
 - Plugin icon (`sugarcube.png`) and Live View "Add Track" icon (`sugarcube2.png`) redesigned; the Add Track icon's rendered size was bumped from 17x17 to 24x24 to match the neighbouring Play/Add Album icons.
