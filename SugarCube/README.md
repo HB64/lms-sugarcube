@@ -8,6 +8,47 @@ https://paypal.me/spicefly
 HB64 Fork - Changes
 +===================+
 
+v7.0.9.12 - 2026
+- Fixed the Live View "Play Album" / "Add Album" / "Add Track" buttons doing
+  nothing: they relied on a classic-skin JavaScript framework (SqueezeJS)
+  that current Lyrion Music Server no longer loads, so every click silently
+  failed. Rewritten to talk directly to LMS's JSON-RPC API instead
+- Fixed the player ID used in that same request: it was reused from a
+  variable already encoded for use in a URL (colons replaced with "%3A"),
+  so even after the above rewrite no player would ever match
+- Fixed the History page's "Play Album" button for the same reasons - it
+  also relied on the dead SqueezeJS call, and additionally passed the raw
+  player object into the URL instead of a real player ID
+- Redesigned the plugin icon and the Live View "Add Track" icon; the Add
+  Track icon is now rendered slightly larger (24x24 instead of 17x17) so
+  it visually matches the Play/Add Album icons next to it
+
+v7.0.9.11 - 2026
+- Fixed a multi-player database bug: AlbumTracker, ArtistTracker and
+  TrackTracker keyed their uniqueness on the artist/album/track value alone
+  instead of (player, value), so saving the same artist/album/track from
+  two different players could silently steal/overwrite the other player's
+  entry, causing that player to "forget" it. Existing databases are
+  migrated automatically on startup; nothing is deleted, the old tables are
+  kept as old_AlbumTracker/old_ArtistTracker/old_TrackTracker as a backup
+- Fixed the trim routines for the same three tables (plus History): they
+  counted rows per player correctly, but then deleted the globally oldest
+  row regardless of player, so one busy player could evict a quieter
+  player's tracked history
+- Fixed track selection (when "show statistics" is off) returning rows in
+  an undefined database order instead of MusicIP's own ranking
+- Fixed "Block Album Repeating" not accepting a value of 0, even though 0
+  ("no blocking") was already a valid, working setting
+- Fixed "Sync Settings Across CHOSEN Players": several FreeStyle/fade
+  settings were accidentally written back to your own player instead of
+  the player(s) you were syncing to
+- Fixed FreeStyle mode's "default to Anything" fallback never triggering
+  when the file-type setting was empty (a comparison was used where an
+  assignment was needed)
+- Renamed "Sync Settings Across ALL Players" to "Sync Settings Across
+  CHOSEN Players": instead of overwriting every known player, you now pick
+  which players receive the synced settings from an expandable checklist
+
 v7.0.9.8 - 2026
 - Fixed "Replace This Track" / "Replace Next Track" so the replaced track is
   now reliably excluded from being picked again straight away (a path-format
