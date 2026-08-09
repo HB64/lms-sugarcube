@@ -2006,6 +2006,7 @@ sub StatsPuller {
 
     my $clientid = $client->id;
     $clientid =~ s/:/%3A/g;           # URI player id
+    my $clientid_raw = $client->id;   # unencoded - for JSON-RPC calls, not URLs
 
     if ($sugarlvTS) {
 
@@ -2038,17 +2039,17 @@ sub StatsPuller {
 
             if ( length($col10) == 0 ) { $col10 = "0"; }
             my $build =
-"<a onclick=\"SqueezeJS.Controller.urlRequest('/anyurl?p0=playlistcontrol&amp;p1=cmd:load&amp;p2=album_id:"
+"<a onclick=\"var r=new XMLHttpRequest();r.open('POST','/jsonrpc.js',true);r.setRequestHeader('Content-Type','application/json');r.onload=function(){};r.send(JSON.stringify({id:1,method:'slim.request',params:['"
+              . $clientid_raw
+              . "',['playlistcontrol','cmd:load','album_id:"
               . $col11
-              . "&amp;player="
-              . $clientid
-              . "', 1, SqueezeJS.string('Loading Album'));\">";
+              . "']]}));\">";
             my $build2 =
-"<a onclick=\"SqueezeJS.Controller.urlRequest('/anyurl?p0=playlistcontrol&amp;p1=cmd:add&amp;p2=album_id:"
+"<a onclick=\"var r=new XMLHttpRequest();r.open('POST','/jsonrpc.js',true);r.setRequestHeader('Content-Type','application/json');r.onload=function(){};r.send(JSON.stringify({id:1,method:'slim.request',params:['"
+              . $clientid_raw
+              . "',['playlistcontrol','cmd:add','album_id:"
               . $col11
-              . "&amp;player="
-              . $clientid
-              . "', 1, SqueezeJS.string('Loading Album'));\">";
+              . "']]}));\">";
             my $build3 =
 "<a href=\"/clixmlbrowser/clicmd=browselibrary+items&amp;mode=albums&amp;album_id="
               . $col11
@@ -2056,11 +2057,11 @@ sub StatsPuller {
               . $clientid
               . "'/index.html?index=0\" target=\"browser\"><img src=\"/html/images/b_mmmix.gif\"  alt=\"More\" title=\"More\"></a>";
             my $build4 =
-"<a onclick=\"SqueezeJS.Controller.urlRequest('/anyurl?p0=playlistcontrol&amp;p1=cmd:add&amp;p2=track_id:"
+"<a onclick=\"var r=new XMLHttpRequest();r.open('POST','/jsonrpc.js',true);r.setRequestHeader('Content-Type','application/json');r.onload=function(){};r.send(JSON.stringify({id:1,method:'slim.request',params:['"
+              . $clientid_raw
+              . "',['playlistcontrol','cmd:add','track_id:"
               . $col12
-              . "&amp;player="
-              . $clientid
-              . "', 1, SqueezeJS.string('Add Track'));\">";
+              . "']]}));\">";
 
             # THIS IS STATISTICS BUILD UP
             $line =
@@ -2080,7 +2081,7 @@ sub StatsPuller {
               . $build2
               . ' <img src="/html/images/b_add.gif" class="cmdLinkIcon" width="17" height="17" alt="Add Album" title="Add Album"></a> '
               . $build4
-              . ' <img src="/plugins/SugarCube/HTML/images/sugarcube2_25x25.png" class="cmdLinkIcon" width="17" height="17" alt="Add Track" title="Add Track"></a> '
+              . ' <img src="/plugins/SugarCube/HTML/images/sugarcube2_25x25.png" class="cmdLinkIcon" width="24" height="24" alt="Add Track" title="Add Track"></a> '
               . $build3
               . '</td></tr><tr><td class=txt>'
               . $col1
@@ -2122,23 +2123,23 @@ sub StatsPuller {
             if ( length($col10) == 0 ) { $col10 = '0'; }
 
             my $build =
-"<a onclick=\"SqueezeJS.Controller.urlRequest('/anyurl?p0=playlistcontrol&amp;p1=cmd:load&amp;p2=album_id:"
+"<a onclick=\"var r=new XMLHttpRequest();r.open('POST','/jsonrpc.js',true);r.setRequestHeader('Content-Type','application/json');r.onload=function(){};r.send(JSON.stringify({id:1,method:'slim.request',params:['"
+              . $clientid_raw
+              . "',['playlistcontrol','cmd:load','album_id:"
               . $col11
-              . "&amp;player="
-              . $clientid
-              . "', 1, SqueezeJS.string('Loading Album'));\">";
+              . "']]}));\">";
             my $build2 =
-"<a onclick=\"SqueezeJS.Controller.urlRequest('/anyurl?p0=playlistcontrol&amp;p1=cmd:add&amp;p2=album_id:"
+"<a onclick=\"var r=new XMLHttpRequest();r.open('POST','/jsonrpc.js',true);r.setRequestHeader('Content-Type','application/json');r.onload=function(){};r.send(JSON.stringify({id:1,method:'slim.request',params:['"
+              . $clientid_raw
+              . "',['playlistcontrol','cmd:add','album_id:"
               . $col11
-              . "&amp;player="
-              . $clientid
-              . "', 1, SqueezeJS.string('Add Album'));\">";
+              . "']]}));\">";
             my $build4 =
-"<a onclick=\"SqueezeJS.Controller.urlRequest('/anyurl?p0=playlistcontrol&amp;p1=cmd:add&amp;p2=track_id:"
+"<a onclick=\"var r=new XMLHttpRequest();r.open('POST','/jsonrpc.js',true);r.setRequestHeader('Content-Type','application/json');r.onload=function(){};r.send(JSON.stringify({id:1,method:'slim.request',params:['"
+              . $clientid_raw
+              . "',['playlistcontrol','cmd:add','track_id:"
               . $col12
-              . "&amp;player="
-              . $clientid
-              . "', 1, SqueezeJS.string('Add Track'));\">";
+              . "']]}));\">";
             my $build3 =
 "<a href=\"/clixmlbrowser/clicmd=browselibrary+items&amp;mode=albums&amp;album_id="
               . $col11
@@ -2163,7 +2164,7 @@ sub StatsPuller {
               . $build2
               . ' <img src="/html/images/b_add.gif" class="cmdLinkIcon" width="17" height="17" alt="Add Album" title="Add Album"></a> '
               . $build4
-              . ' <img src="/plugins/SugarCube/HTML/images/sugarcube2_25x25.png" class="cmdLinkIcon" width="17" height="17" alt="Add Track" title="Add Track"></a> '
+              . ' <img src="/plugins/SugarCube/HTML/images/sugarcube2_25x25.png" class="cmdLinkIcon" width="24" height="24" alt="Add Track" title="Add Track"></a> '
               . $build3
               . '</td></tr><tr><td class=txt>'
               . $col1
