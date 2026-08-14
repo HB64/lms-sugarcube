@@ -2081,7 +2081,7 @@ sub StatsPuller {
               . $build2
               . ' <img src="/html/images/b_add.gif" class="cmdLinkIcon" width="17" height="17" alt="Add Album" title="Add Album"></a> '
               . $build4
-              . ' <img src="/plugins/SugarCube/HTML/images/sugarcube2_25x25.png" class="cmdLinkIcon" width="24" height="24" alt="Add Track" title="Add Track"></a> '
+              . ' <img src="/html/images/b_add.gif" class="cmdLinkIcon" width="17" height="17" alt="Add Track to Queue" title="Add Track to Queue"></a> '
               . $build3
               . '</td></tr><tr><td class=txt>'
               . $col1
@@ -2164,7 +2164,7 @@ sub StatsPuller {
               . $build2
               . ' <img src="/html/images/b_add.gif" class="cmdLinkIcon" width="17" height="17" alt="Add Album" title="Add Album"></a> '
               . $build4
-              . ' <img src="/plugins/SugarCube/HTML/images/sugarcube2_25x25.png" class="cmdLinkIcon" width="24" height="24" alt="Add Track" title="Add Track"></a> '
+              . ' <img src="/html/images/b_add.gif" class="cmdLinkIcon" width="17" height="17" alt="Add Track to Queue" title="Add Track to Queue"></a> '
               . $build3
               . '</td></tr><tr><td class=txt>'
               . $col1
