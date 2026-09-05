@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extensions>
 	<plugins>
-		<plugin name="SugarCube" category="playlists" version="7.0.9.12" minTarget="7.9" maxTarget="*">
+		<plugin name="SugarCube" category="playlists" version="7.0.9.13" minTarget="7.9" maxTarget="*">
 			<title lang="EN">SugarCube</title>
 			<desc lang="EN">A modified version of the SugarCube plugin with artist weighting, Floating Wobble, a SugarCube Quick Settings page for on-the-fly Filter/Recipe/Genre/Artist/Mood mixing with automatic track replacement, robust multi-player support, and the ability to sync settings across selected players.</desc>
-			<url>https://github.com/HB64/lms-sugarcube/releases/download/7.0.9.12/lms-sugarcube-7.0.9.12.zip</url>
+			<url>https://github.com/HB64/lms-sugarcube/releases/download/7.0.9.13/lms-sugarcube-7.0.9.13.zip</url>
 			<creator>Charles Parker, AF1, HB64</creator>
 			<link>https://github.com/HB64/lms-sugarcube</link>
-			<sha>ab0c0446ce4421bd4d5a174c28b9f43a5203f3b9</sha>
+			<sha>4804311d16cf08c3cc263e51f33c11412128cc63</sha>
 		</plugin>
 	</plugins>
 </extensions>
