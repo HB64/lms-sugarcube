@@ -1,0 +1,338 @@
+[%- IF !ajaxUpdate %]
+[% pagetitle = 'PLUGIN_SUGARCUBELV' | string; pageicon = 'PLUGIN_SUGARCUBELV' %]
+[%- pwd_list = BLOCK -%]/
+	<a href="[% webroot %][% path %]?player=[% player | uri %][% statisticparameters %]">
+		[% "PLUGIN_SUGARCUBELV" | string %]
+	</a>
+[% END -%]
+[%- pageHeaderInfo = BLOCK %]
+[% END -%]
+[% PROCESS pageheader.html %]
+[% PROCESS plugins/SugarCube/HTML/css/sugarcube.css %]
+
+[%# STEP - Henk, 2026-09-04 (ported from saysaar's SC-EXTMIP build). THIS PAGE MUST NEVER          %]
+[%# NAVIGATE. It used to rewrite its own address every refreshRate seconds with location.replace.  %]
+[%# In Material, Live View is a fullscreen dialog, and rewriting the address is navigation - so     %]
+[%# Material closed the dialog and threw you back to the home page. Material was behaving           %]
+[%# correctly; the page was navigating. location.replace also destroyed the back history. It also   %]
+[%# meant the currently-playing/up-next info never actually refreshed while you stayed on the page  %]
+[%# in Material, since the reload kept getting short-circuited by the dialog closing.               %]
+[%#                                                                                                 %]
+[%# Now the CONTENTS are replaced instead. We ask the server for this same page with ajaxUpdate=1,  %]
+[%# which the guards at the top and bottom of this file already answer by leaving out the page      %]
+[%# furniture, and drop the reply into the div below. Nothing navigates, so Material has nothing to %]
+[%# react to, and the scroll position survives - which a full reload destroyed.                     %]
+[%#                                                                                                 %]
+[%# The transport bar's own script sits OUTSIDE the swapped div on purpose: a script placed by an   %]
+[%# innerHTML assignment is never executed, so it must not be part of what gets replaced.           %]
+	<SCRIPT>
+	var scLvUrl = "[% webroot %][% path %]?player=[% player | uri %][% statisticparameters %]";
+
+	[%# scPlayerCmd - Henk, 2026-09-04 (ported from saysaar's SC-EXTMIP build). Previous/         %]
+	[%# play-pause/next, right here on Live View. Same shape as this plugin's other JSON-RPC      %]
+	[%# calls (a plain slim.request POST to /jsonrpc.js), so no core skin control bar is needed.  %]
+	var scPlayerId = "[% player %]";
+
+	function scPlayerCmd(cmd) {
+		var r = new XMLHttpRequest();
+		r.open('POST', '/jsonrpc.js', true);
+		r.setRequestHeader('Content-Type', 'application/json');
+		r.onloadend = function() {
+			if (window.scLvRefresh) { scLvRefresh(); }
+			if (window.scUpdatePlayState) { scUpdatePlayState(); }
+		};
+		r.send(JSON.stringify({
+			id: 1,
+			method: 'slim.request',
+			params: [scPlayerId, cmd]
+		}));
+	}
+
+	[%# scUpdatePlayState - Henk 2026-09-04: the middle button always showed the pause icon,      %]
+	[%# regardless of whether the player was actually playing or paused. Polls the player's own    %]
+	[%# status (mode: play/pause/stop) via the same JSON-RPC pattern as scPlayerCmd, and swaps      %]
+	[%# which of the two pre-rendered SVGs is visible - simple show/hide, not a re-render, so it    %]
+	[%# works whether or not sclvbody happens to be mid-swap at the same moment.                    %]
+	function scUpdatePlayState() {
+		var r = new XMLHttpRequest();
+		r.open('POST', '/jsonrpc.js', true);
+		r.setRequestHeader('Content-Type', 'application/json');
+		r.onloadend = function() {
+			try {
+				var data = JSON.parse(r.responseText);
+				var mode = data && data.result && data.result.mode;
+				var playIcon = document.getElementById('scIconPlay');
+				var pauseIcon = document.getElementById('scIconPause');
+				if (!playIcon || !pauseIcon) { return; }
+				if (mode == 'play') {
+					playIcon.style.display = 'none';
+					pauseIcon.style.display = '';
+				}
+				else {
+					playIcon.style.display = '';
+					pauseIcon.style.display = 'none';
+				}
+			}
+			catch (e) {}
+		};
+		r.send(JSON.stringify({
+			id: 1,
+			method: 'slim.request',
+			params: [scPlayerId, ['status', '-', 1]]
+		}));
+	}
+
+	// scLvAppliedSeq - Henk, 2026-09-04. scLvRefresh can have several requests in flight at once
+	// (the setInterval, the staggered catch-up retries, and the refresh every button press
+	// triggers), and nothing guarantees they land back in the order they were sent. A slow, stale
+	// reply arriving after a fresher one used to overwrite it - showing Currently Playing / Coming
+	// Up Next / the MIP recommendations table, then blanking them out again a moment later. Each
+	// request now carries its own sequence number, and a reply is only applied if no later
+	// request's reply has already been applied - a straggler is simply dropped.
+	var scLvSeq = 0;
+	var scLvAppliedSeq = 0;
+	function scLvRefresh() {
+		var seq = ++scLvSeq;
+		var r = new XMLHttpRequest();
+		// Cache-bust with a timestamp, Henk 2026-09-04 - without it, the staggered quick retries
+		// below all hit the exact same URL within a few seconds of each other, and some browsers
+		// serve the first (stale, N/A) response straight from HTTP cache for the rest instead of
+		// actually asking the server again. This is a GET to a page that changes every second, so
+		// it must never be cached.
+		r.open('GET', scLvUrl + '&ajaxUpdate=1&_=' + Date.now(), true);
+		r.onloadend = function () {
+			if (seq <= scLvAppliedSeq) { return; }    // a fresher reply already won, drop this one
+			scLvAppliedSeq = seq;
+			var b = document.getElementById('sclvbody');
+			if (r.status == 200 && b) { b.innerHTML = r.responseText; }
+			// Piggyback the play/pause icon state on every content refresh, Henk 2026-09-04 - one
+			// less thing to separately schedule, and it means the icon stays in sync on the same
+			// cadence as the rest of the page.
+			if (window.scUpdatePlayState) { scUpdatePlayState(); }
+		};
+		r.send();
+	}
+	scUpdatePlayState();
+[% refresh = refresh || 0 %]
+[% IF refresh > 0 %]
+	setInterval(scLvRefresh, [% refresh %] * [% refreshRate %]);
+[% END %]
+	// Staggered catch-up retries, Henk 2026-09-04. Landing here straight after Start a Mix (via
+	// quickplay's 3-second splash), the MIP request that builds the recommendations is still
+	// async and has not landed yet - so the very first render shows N/A until the next scheduled
+	// refresh, which could be a full refreshRate (or the 10s floor) away. Same fix quicksettings.html
+	// already uses for the exact same race (see scShowTracks there): a few quick extra refreshes
+	// right after load to catch up as soon as the async response lands, instead of waiting.
+	setTimeout(scLvRefresh, 900);
+	setTimeout(scLvRefresh, 2200);
+	setTimeout(scLvRefresh, 4500);
+	</SCRIPT>
+
+	[%# Fixed transport bar, Henk, 2026-09-04. Icon-only Previous/Play-Pause/Next, centered,     %]
+	[%# sized to match Material's own bottom player bar height rather than saysaar's taller       %]
+	[%# text-labelled version - Material's own bottom bar is hidden behind its fullscreen dialog   %]
+	[%# while any plugin page is open, so this is SugarCube's own stand-in.                        %]
+	[%# Bar height brought down to match Material's own bottom player bar, Henk 2026-09-04 (was     %]
+	[%# 88px, overshot after the icon-size fight - 64px is a normal compact player-bar height).     %]
+	<div style="position:fixed; left:0; right:0; bottom:0; z-index:1000; height:64px; box-sizing:border-box;
+		background:var(--background-color, #424242); border-top:1px solid var(--list-item-border-color, rgba(255,255,255,0.15));
+		display:flex; align-items:center; justify-content:center; gap:40px;">
+		[%# SVG instead of Unicode glyphs, Henk's idea 2026-09-04. Sized with width/height, not      %]
+		[%# font-size, which sidesteps the whole Vuetify !important fight from a moment ago          %]
+		[%# entirely - an <svg> ignores the button's font-size altogether. fill="currentColor" keeps %]
+		[%# it following --text-color the same way the old glyphs did.                               %]
+		<button type="button" onclick="scPlayerCmd(['playlist','index','-1'])" class="sc-transport-btn" aria-label="Previous" title="Previous">
+			<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+		</button>
+		[%# Two icons, one hidden - Henk 2026-09-04. The button always showed the pause icon         %]
+		[%# regardless of actual state; scUpdatePlayState() above toggles which of these is         %]
+		[%# visible based on the player's real mode (play/pause/stop), polled the same way as       %]
+		[%# everything else on this page. Pause shown by default until the first poll lands, since  %]
+		[%# landing on Live View usually means something is already playing.                        %]
+		[%# Filled circle, Henk 2026-09-04 - matches Material's own player bar convention: the       %]
+		[%# play/pause button stands out as a solid circle, Previous/Next stay plain flat icons.    %]
+		[%# Circle fill is --text-color and the icon fill is --background-color (the two swapped),  %]
+		[%# so it stays a guaranteed-contrast "punched out" icon under any theme rather than a       %]
+		[%# hardcoded colour that might not suit a light theme.                                      %]
+		<button type="button" onclick="scPlayerCmd(['pause'])" class="sc-transport-btn sc-transport-btn-play" aria-label="Play / Pause" title="Play / Pause">
+			<svg id="scIconPlay" width="26" height="26" viewBox="0 0 24 24" fill="var(--background-color, #424242)" style="display:none"><path d="M8 5v14l11-7z"/></svg>
+			<svg id="scIconPause" width="26" height="26" viewBox="0 0 24 24" fill="var(--background-color, #424242)"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+		</button>
+		<button type="button" onclick="scPlayerCmd(['playlist','index','+1'])" class="sc-transport-btn" aria-label="Next" title="Next">
+			<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+		</button>
+	</div>
+	[%# Styling notes, Henk 2026-09-04. Grey background matches Material's own chrome instead of    %]
+	[%# an arbitrary colour: --background-color/--text-color/--list-item-border-color are           %]
+	[%# Material's OWN CSS variables, already copied onto this iframe's document root for every     %]
+	[%# SugarCube page (lms-material's iframe-dialog.js: copyVars() runs for any 'extras' page,      %]
+	[%# which this is) - so the bar follows whatever theme the user has picked. The fallback values  %]
+	[%# are what render in Classic or any non-Material skin, where those variables are never set.    %]
+	[%# Icons are SVG with an explicit width/height, not text glyphs sized by font-size - the        %]
+	[%# earlier text-glyph version fought Vuetify's own !important font-size rules on <button> and   %]
+	[%# needed !important right back to win; SVG sidesteps that fight completely, since its size      %]
+	[%# isn't driven by font-size at all. fill="currentColor" still follows the button's own          %]
+	[%# `color`, so theming is unaffected. Flat, no button chrome, matching Material's own bottom     %]
+	[%# bar rather than looking like a separate widget bolted onto the page.                          %]
+	<style>
+		.sc-transport-btn {
+			background: transparent !important;
+			color: var(--text-color, #e0e0e0) !important;
+			border: none !important;
+			cursor: pointer !important;
+			padding: 0 !important;
+			margin: 0 4px !important;
+			display: flex !important;
+			align-items: center !important;
+			justify-content: center !important;
+			opacity: 0.85 !important;
+		}
+		.sc-transport-btn:hover { opacity: 1 !important; }
+		[%# Solid circle just for Play/Pause, Henk 2026-09-04 - Material's own convention is a       %]
+		[%# filled circular button for play/pause while the flanking controls stay flat, so this    %]
+		[%# one button gets its own rule instead of changing .sc-transport-btn for all three.        %]
+		[%# 44px comfortably contains the 26x26 icon with even padding on every side.                %]
+		.sc-transport-btn-play {
+			background: var(--text-color, #e0e0e0) !important;
+			border-radius: 50% !important;
+			width: 44px !important;
+			height: 44px !important;
+			opacity: 1 !important;
+		}
+		[%# "New Mix" / "Replace Track" buttons under each cover, Henk 2026-09-05 - now icon-only,   %]
+		[%# same reasoning as the transport bar (Craig Drummond's own stated preference against text %]
+		[%# in icons/buttons - breaks in other languages). Almost identical to .sc-transport-btn, but %]
+		[%# that class is display:flex, which takes the button out of inline flow so the parent's     %]
+		[%# text-align:center has nothing to center - these buttons sat flush left under the cover    %]
+		[%# instead of centered. inline-flex keeps the icon centered *inside* the button (flex still  %]
+		[%# applies within it) while the button itself stays an inline-level box the parent CAN       %]
+		[%# center, and margin is zeroed since these are always alone in their own div (no neighbours %]
+		[%# to space away from, unlike the three transport buttons in a row).                          %]
+		[%# Henk, 2026-09-05 - fallback colour deliberately differs from the transport bar's own       %]
+		[%# #e0e0e0: those buttons sit on a grey bar in every skin so a light fallback always has      %]
+		[%# contrast, but these two sit directly on the page background, which is light in every       %]
+		[%# non-Material skin - #e0e0e0 there was almost invisible. #333 is dark enough to read on a   %]
+		[%# light page while --text-color still wins outright whenever Material supplies it.           %]
+		.sc-livebtn-icon {
+			background: transparent !important;
+			color: var(--text-color, #333) !important;
+			border: none !important;
+			cursor: pointer !important;
+			padding: 0 !important;
+			margin: 0 !important;
+			display: inline-flex !important;
+			align-items: center !important;
+			justify-content: center !important;
+			opacity: 0.85 !important;
+		}
+		.sc-livebtn-icon:hover { opacity: 1 !important; }
+		[%# "Play Next" icon in the MusicIP Track Recommendations table, Henk 2026-09-05 - built as %]
+		[%# a raw <a> string in Breakout.pm's StatsPuller (that table isn't TT-rendered, so this      %]
+		[%# class lives here purely because this is the page it ends up embedded in). Same theming    %]
+		[%# convention as .sc-livebtn-icon - --text-color with a dark fallback for non-Material skins -%]
+		[%# but inline-block/no-underline instead of button reset properties, since the element is an %]
+		[%# <a>, not a <button>.                                                                       %]
+		.sc-mipbtn {
+			color: var(--text-color, #333) !important;
+			text-decoration: none !important;
+			display: inline-flex !important;
+			align-items: center !important;
+			cursor: pointer !important;
+			opacity: 0.85 !important;
+		}
+		.sc-mipbtn:hover { opacity: 1 !important; }
+	</style>
+
+<div id="sclvbody" style="padding-bottom:76px;">
+[% END %]
+	[%# Henk, 2026-08-26: dropped the "SC Live View" row - Material's own dialog toolbar already   %]
+	[%# reads "SugarCube Live View" for this page, so the two just repeated the same title.        %]
+	<table class='topside'>
+	<thead>
+	<tr><th><strong>Spicefly SugarCube Statistics</strong></th></tr>
+	</thead>
+	<tbody>
+	<tr><td>Queued [% sugarcube_trackcount %] tracks, including [% sugarcube_randomcount %] random tracks.  [% sugarcube_randomcountpercentage %] of the total.</td></tr>
+	<tr><td>Random Track Last Chosen; [% sugarcube_randomtrack %] - [% sugarcube_stats_random_time %]</td></tr>
+	<tr><td>[% master %]</td></tr>
+	<tr><td>[% mixstatus %]</td></tr>
+	</tbody>
+	</table>
+	[% IF track != '' %]
+	<hr>
+	<table class='midside'>
+	<tr>
+	[%# Henk, 2026-09-04 - was the "size" var / cover_SIZExSIZE_o.jpg (sugarlviconsize), which never %]
+	[%# got the fix SC-EXTMIP's reference build already applied on 2026-08-09: asking Lyrion's own  %]
+	[%# artwork proxy for a one-off custom size+mode combo nothing else requests means it isn't      %]
+	[%# already cached, and rendered tiny/wrong as a result - changing sugarlviconsize never had any %]
+	[%# visible effect for exactly this reason. 300x300_f is the same size+mode Material's own UI    %]
+	[%# already requests elsewhere, so it's always already generated.                                %]
+	[%# Bare width/height HTML attributes are weak and lose to any stylesheet rule touching img -    %]
+	[%# same fight as the transport buttons earlier today. inline style= wins reliably instead, and  %]
+	[%# picks up rounded corners to match Quick Settings' covers while we're at it.                  %]
+	[%# Henk, 2026-09-04 - "New Mix"/"Replace Track" buttons under each cover, right in the same    %]
+	[%# <td> as the image (not a new <tr>) so the existing rowspan on these cells doesn't need to    %]
+	[%# change. Same scPlayerCmd JSON-RPC pattern as the transport bar - see scStartMix/scReplaceNext%]
+	[%# in Plugin.pm - so Live View never navigates away and back for either.                        %]
+	[%# Henk, 2026-09-05 - New Mix converted from a text-label pill to an icon-only button, matching %]
+	[%# Material Skin author Craig Drummond's own stated preference against text in icons/buttons    %]
+	[%# (breaks in other languages). Reuses the exact transport-bar pattern: SVG with an explicit    %]
+	[%# width/height and fill="currentColor", which follows --text-color automatically - white in    %]
+	[%# Material's dark theme, black wherever --text-color is dark, with no separate colour to        %]
+	[%# maintain. The visible "New Mix" text moves to aria-label/title as "Start New Mix" instead,    %]
+	[%# folding in Henk's earlier rename request for free now that there's no label left to resize.  %]
+	[% IF showstats == 'ON' %]
+	<td rowspan=8 style="vertical-align:top;"><img style="width:100px !important; height:100px !important; border-radius:10px !important; object-fit:cover !important; display:block !important;" src="[% webroot %]music/[% currentalbumart %]/cover_300x300_f.jpg">
+		[% IF sc_can_act %]<div style="margin-top:8px; text-align:center; width:100px;"><button type="button" onclick="scPlayerCmd(['sugarcube','startmix'])" class="sc-livebtn-icon" aria-label="Start New Mix" title="Start New Mix"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button></div>[% END %]</td>
+	[% ELSE %]
+	<td rowspan=5 style="vertical-align:top;"><img style="width:100px !important; height:100px !important; border-radius:10px !important; object-fit:cover !important; display:block !important;" src="[% webroot %]music/[% currentalbumart %]/cover_300x300_f.jpg">
+		[% IF sc_can_act %]<div style="margin-top:8px; text-align:center; width:100px;"><button type="button" onclick="scPlayerCmd(['sugarcube','startmix'])" class="sc-livebtn-icon" aria-label="Start New Mix" title="Start New Mix"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button></div>[% END %]</td>
+	[% END %]
+
+	<td><div class='heads'>Currently Playing</div></td>
+	[% IF showstats == 'ON' %]
+	<td rowspan=8 style="vertical-align:top;"><img style="width:100px !important; height:100px !important; border-radius:10px !important; object-fit:cover !important; display:block !important;" src="[% webroot %]music/[% comingupnextalbumart %]/cover_300x300_f.jpg">
+		[% IF sc_can_act %]<div style="margin-top:8px; text-align:center; width:100px;"><button type="button" onclick="scPlayerCmd(['sugarcube','replacenext'])" class="sc-livebtn-icon" aria-label="Replace Track" title="Replace Track"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></button></div>[% END %]</td>
+	[% ELSE %]
+	<td rowspan=5 style="vertical-align:top;"><img style="width:100px !important; height:100px !important; border-radius:10px !important; object-fit:cover !important; display:block !important;" src="[% webroot %]music/[% comingupnextalbumart %]/cover_300x300_f.jpg">
+		[% IF sc_can_act %]<div style="margin-top:8px; text-align:center; width:100px;"><button type="button" onclick="scPlayerCmd(['sugarcube','replacenext'])" class="sc-livebtn-icon" aria-label="Replace Track" title="Replace Track"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></button></div>[% END %]</td>
+	[% END %]
+	<td><div class='heads'>Coming Up Next</div></td>
+	</tr>
+	<tr><td>[% currenttrack %]</td><td>[% comingupnexttrack %]</td></tr>
+	<tr><td>[% currentalbum %]</td><td>[% comingupnextalbum %]</td></tr>
+	<tr><td>[% currentartist %]</td><td>[% comingupnextartist %]</td></tr>
+	<tr><td>[% currentgenre %]</td><td>[% comingupnextgenre %]</td></tr>
+	[% IF showstats == 'ON' %]
+	<tr><td>Playcount: [% currentpc %]</td><td>Playcount: [% comingupnextpc %]</td></tr>
+	<tr><td>Rating: [% currentrat %]</td><td>Rating: [% comingupnextrat %]</td></tr>
+	<tr><td title="Last Played">[% currentlp %]</td><td title="Last Played">[% comingupnextlp %]</td></tr>
+	[% END %]
+	</table>
+	<hr>
+
+	[% IF mixstatus == '' %]
+	<div class="filler1"></div>
+	[% WRAPPER settingGroup title= mode %][% END %]
+	<div class="filler2"></div>
+	<table class='bottomside'>
+		[% filters %]
+	</table>
+		[% END %]
+	[% ELSE %]
+	[%# Henk, 2026-09-04 - "New Mix" clears the playlist and asks MIP for a fresh one; MIP's own    %]
+	[%# reply is async, same as always (mixfromplaying/AutoStartMix), so there's a genuine gap       %]
+	[%# between the click and the first track actually starting. Reaching Live View the normal way   %]
+	[%# (via quickplay.html's 3-second splash) usually hides that gap - by the time you land here,   %]
+	[%# MIP has often already answered. Clicking "New Mix" from Live View itself has no such buffer, %]
+	[%# so the same wait was showing as a bare blank page instead - this message fills that gap.      %]
+	<hr>
+	<div class="filler1"></div>
+	<p>Starting new mix - waiting for MusicIP...</p>
+	[% END %]
+
+[%- IF !ajaxUpdate %]
+</div>
+[% PROCESS pagefooter.html %]
+[% END %]
