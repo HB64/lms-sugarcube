@@ -1,0 +1,14 @@
+[%# THE PAGE CHOOSER, at the top of every settings page. Ported from MIPster (guptaas), itself      %]
+[%# copied from Alternative Play Count. LMS lists this plugin ONCE in its settings menu whatever we  %]
+[%# do, so moving between our pages has to be offered here. It navigates on change - there is no     %]
+[%# Save involved and nothing is lost, because each page saves itself.                                %]
+[% IF subpages.size > 1 %]
+[% WRAPPER setting title="PLUGIN_SC_SUBPAGE" desc="PLUGIN_SC_SUBPAGEDESC" %]
+	<select class="stdedit" name="subpage" id="subpage" onchange="location.href=options[selectedIndex].value">
+		[% FOREACH option = subpages.keys.sort %]
+			<option [% IF subpage == option %]selected[% END %] value="[% subpages.$option %]">[% option | getstring %]</option>
+		[%- END -%]
+	</select>
+[% END %]
+<hr>
+[% END %]

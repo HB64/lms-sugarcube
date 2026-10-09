@@ -1,196 +1,126 @@
 [% PROCESS settings/header.html %]
 
-[%# MIP Export status window (Henk, 2026-09-02) - ported from the SC-EXTMIP/HB64 builds. Same       %]
-[%# sc-mipexport- prefixed classes, no animation, just color-coded text.                             %]
-<style>
-.sc-mipexport-statuswrapper { padding: 4px 0 10px 0; min-height: 1.4em; }
-.sc-mipexport-status { font-size: 105%; font-weight: bold; color: #b00020; }
-.sc-mipexport-status.sc-mipexport-success { color: green; }
-.sc-mipexport-status.sc-mipexport-running:after { content: ' ...'; }
-</style>
-<div class="sc-mipexport-statuswrapper">
-	<p id="sc_mipexport_statusmsg" class="sc-mipexport-status"></p>
-</div>
+[%# Subpage chooser, ported from MIPster (guptaas) 2026-09-19 - hidden by itself while this is the %]
+[%# only subpage registered (subpages.size == 1), starts showing once Exports exists as a second   %]
+[%# one. See subpage_chooser.html and SettingsBase.pm for how the list it draws from is built.      %]
+[% PROCESS plugins/SugarCube/settings/subpage_chooser.html %]
 
-[% WRAPPER setting title="PLUGIN_SC_WEB_SUGARCUBE" desc="" %]
-	<div class="prefDesc">[% "PLUGIN_SC_WEB_SUGARCUBETEXT" | string %]</div>
+[%# Henk, 2026-09-13: same fix as player.html the same day - the "setting" macro's own help-icon   %]
+[%# behaviour (click to reveal in Material, hover in Classic) always-prints the description inline  %]
+[%# on a phone-width Material view instead, making this page a pain to scroll through on mobile.    %]
+[%# Ported the same self-contained info-icon/popover widget (sc-info-wrap/sc-info-icon/               %]
+[%# sc-info-popover/scToggleInfo, position-clamped against both screen edges) instead of the skin's  %]
+[%# own macro - see player.html's own copy of this same block for the fuller history/reasoning.     %]
+<style type="text/css">
+	.sc-info-wrap { position:relative; display:inline-block; }
+	.sc-info-icon { cursor:pointer; opacity:0.7; padding-left:8px; }
+	.sc-info-popover {
+		display:none; position:absolute; z-index:1000; top:100%; left:0; margin-top:6px;
+		width:300px; max-width:80vw; background:#2b2b2b; color:#fff;
+		border-radius:8px; padding:16px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+		font-size:0.85em; line-height:1.4;
+	}
+	.sc-info-popover button {
+		background:none; border:1px solid #9c9; color:#9c9; border-radius:16px;
+		padding:6px 16px; cursor:pointer; float:right; margin-top:12px;
+	}
+</style>
+<script type="text/javascript">
+	function scToggleInfo(el) {
+		var pop = el.nextElementSibling;
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p !== pop) { p.style.display = 'none'; }
+		});
+		var opening = (pop.style.display !== 'block');
+		pop.style.left = '0';
+		pop.style.display = opening ? 'block' : 'none';
+		if (opening) {
+			var scInfoMargin = 8;
+			var rect = pop.getBoundingClientRect();
+			var shift = 0;
+			if (rect.right > window.innerWidth - scInfoMargin) {
+				shift = (window.innerWidth - scInfoMargin) - rect.right;
+			}
+			if (rect.left + shift < scInfoMargin) {
+				shift = scInfoMargin - rect.left;
+			}
+			pop.style.left = shift + 'px';
+		}
+	}
+	document.addEventListener('click', function(e) {
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p.style.display === 'block' && !p.closest('.sc-info-wrap').contains(e.target)) {
+				p.style.display = 'none';
+			}
+		});
+	});
+</script>
+
+[%# Local WRAPPER template replacing "setting" everywhere below - same title/desc/content shape, %]
+[%# but rendered with the info-icon widget above instead of relying on the skin's own macro.      %]
+[% BLOCK scinfosetting %]
+<div style="padding:4px 0 4px 4px;">
+	[% IF title %]<label class="stdlabel">[% title | string %]</label>[% END %]
+	[% IF desc %]
+	<span class="sc-info-wrap">
+		<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+		<div class="sc-info-popover">
+			[% desc | string %]
+			<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+			<div style="clear:both;"></div>
+		</div>
+	</span>
+	[% END %]
+	<br>
+	[% content %]
+</div>
 [% END %]
 
-	[% WRAPPER settingSection %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_MAIN_PORT" desc="PLUGIN_SC_MAIN_PORTDESC" %]
-		<input type="text" class="stdedit" name="sugarport" id="sugarport" value="[% prefs.sugarport %]" size="5" />
-		[% END %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_MAIN_HOST" desc="PLUGIN_SC_WEB_MAIN_HOSTDESC" %]
-		<input type="text" class="stdedit" name="miphosturl" id="miphosturl" value="[% prefs.miphosturl %]" size="15" />
-		[% END %]
-	[% END %]
+[%# 2026-08-10: every row moved from settingGroup to setting, matching player.html and the      %]
+[%# wrapper Alternative Play Count and Lyrion's own pages use. That is what puts the description %]
+[%# behind the help icon instead of printing it on the page - a click on the question mark in    %]
+[%# Material, a hover on the exclamation mark in Classic. Section breaks are <hr><br>, copied     %]
+[%# from APC. Do not reintroduce settingGroup here.                                              %]
+[%# Henk, 2026-08-31: the standalone <br> between individual rows is gone - the setting macro's   %]
+[%# own spacing was enough on its own and the extra <br> made the page feel too spread out. Only  %]
+[%# the <hr><br> section dividers remain.                                                        %]
 
-[%# Moved out of settingGroup/settingSection 2026-09-03 (Henk) - matching SC-EXTMIP's flat setting %]
-[%# macro, which folds the description behind a (?) icon instead of printing it on the page.        %]
-[%# Positioned directly under MusicIP Host Location, 2026-09-03 (Henk).                             %]
-[% WRAPPER setting title="PLUGIN_SC_WEB_LOCALMEDIAPATH" desc="PLUGIN_SC_WEB_LOCALMEDIAPATHDESC" %]
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MAIN_HOST" desc="PLUGIN_SC_WEB_MAIN_HOSTDESC" %]
+	<input type="text" class="stdedit" name="miphosturl" id="miphosturl" value="[% prefs.miphosturl %]" size="15" />
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_MAIN_PORT" desc="PLUGIN_SC_MAIN_PORTDESC" %]
+	<input type="text" class="stdedit" name="sugarport" id="sugarport" value="[% prefs.sugarport %]" size="5" />
+[% END %]
+
+<hr><br>
+
+[%# MIP Export used to have its own inline section here (checkbox, time, replace-extension,     %]
+[%# rating-threshold dropdown, Export Now/Abort, plus the status window and polling script       %]
+[%# further down this file). Removed 2026-09-19, step 4 of the MIPster export port - it is fully  %]
+[%# superseded by the Exports subpage (SettingsExports.pm / exports.html), reachable through the  %]
+[%# "Settings Section" chooser at the top of this page.                                          %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_LOCALMEDIAPATH" desc="PLUGIN_SC_WEB_LOCALMEDIAPATHDESC" %]
 	<input type="text" class="stdedit" name="localmediapath" id="localmediapath" value="[% prefs.localmediapath %]" size="30">
 [% END %]
 
-[% WRAPPER setting title="PLUGIN_SC_WEB_NASCONVERTPATH" desc="PLUGIN_SC_WEB_NASCONVERTPATHDESC" %]
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_NASCONVERTPATH" desc="PLUGIN_SC_WEB_NASCONVERTPATHDESC" %]
 	<input type="text" class="stdedit" name="nasconvertpath" id="nasconvertpath" value="[% prefs.nasconvertpath %]" size="30">
 [% END %]
 
-	[% WRAPPER settingSection %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_TIMEOUT" desc="PLUGIN_SC_WEB_TIMEOUTDESC" %]
-			<input type="text" class="stdedit sliderInput_30_120_5" name="sqlitetimeout" id="sqlitetimeout" value="[% prefs.sqlitetimeout %]" size="2">
-		[% END %]
-		[%# "Enable Dynamic Path Conversion" checkbox removed 2026-09-03 (Henk) - matching         %]
-		[%# SC-EXTMIP exactly: conversion is now implicit, driven by whether "Music Path in        %]
-		[%# MusicIP" (nasconvertpath) below is filled in, via scPathPair() in Plugin.pm.            %]
-		[%# Path fields (localmediapath/nasconvertpath) moved out to standalone setting blocks     %]
-		[%# above, 2026-09-03. Second path pair (localmediapath_2/nasconvertpath_2) removed         %]
-		[%# 2026-09-02 (Henk) - DPC simplified to one pair, matching the HB64 fork.                 %]
-		<HR><BR>
+<hr><br>
 
-		[%# MIP Export (Henk, 2026-09-02) - ported from the saysaar/SC-EXTMIP build and HB64 fork.  %]
-		[%# Global, not per-player, so it lives here. Reuses sugarport/miphosturl above and this     %]
-		[%# build's own sugardpc/localmediapath/nasconvertpath (both pairs) - no separate            %]
-		[%# connection or path fields.                                                               %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_MIPEXPORT_ENABLED" desc="PLUGIN_SC_WEB_MIPEXPORT_ENABLEDDESC" %]
-			<input type="checkbox" [% IF prefs.sc_mipexport_enabled %]checked [% END %] class="stdedit" name="sc_mipexport_enabled" id="sc_mipexport_enabled" value="1"/>
-		[% END %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_MIPEXPORT_TIME" desc="PLUGIN_SC_WEB_MIPEXPORT_TIMEDESC" %]
-			<input type="text" class="stdedit" name="sc_mipexport_time" id="sc_mipexport_time" value="[% prefs.sc_mipexport_time %]" size="5" />
-		[% END %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_MIPEXPORT_REPLACEEXT" desc="PLUGIN_SC_WEB_MIPEXPORT_REPLACEEXTDESC" %]
-			<input type="text" class="stdedit" name="sc_mipexport_replaceextension" id="sc_mipexport_replaceextension" value="[% prefs.sc_mipexport_replaceextension %]" size="6" />
-		[% END %]
-		[%# "Adjust odd ratings" - ported from the original plugin's MIP rating threshold. 0        %]
-		[%# disables it (plain 0-100 -> 0-5 bucket); 1-4 sends ratings below N stars to MIP as 0     %]
-		[%# and stretches the rest to cover MIP's full 1-5 range. See scMIPConvertRating.            %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_MIPEXPORT_RATING_THRESHOLD" desc="PLUGIN_SC_WEB_MIPEXPORT_RATING_THRESHOLDDESC" %]
-			<select class="stdedit" name="sc_mipexport_rating_threshold" id="sc_mipexport_rating_threshold">
-				<option [% IF prefs.sc_mipexport_rating_threshold == 0 %]selected [% END %]value="0">0 ([% "PLUGIN_SC_WEB_MIPEXPORT_RATING_THRESHOLD_OFF" | string %])</option>
-				<option [% IF prefs.sc_mipexport_rating_threshold == 1 %]selected [% END %]value="1">1</option>
-				<option [% IF prefs.sc_mipexport_rating_threshold == 2 %]selected [% END %]value="2">2</option>
-				<option [% IF prefs.sc_mipexport_rating_threshold == 3 %]selected [% END %]value="3">3</option>
-				<option [% IF prefs.sc_mipexport_rating_threshold == 4 %]selected [% END %]value="4">4</option>
-			</select>
-		[% END %]
-		[%# Export Now / Abort with live status window above - disabled while a scan or export is  %]
-		[%# already running, via activelmsscan/activemipexport from Settings.pm's handler.          %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_MIPEXPORT_NOW" desc="" %]
-			<input class="stdclick" id="sc_mipexport_exportnow" name="exportnow" type="submit" value="[% "PLUGIN_SC_WEB_MIPEXPORT_NOW_BUTTON" | string %]"[% IF activemipexport or activelmsscan %] disabled[% END %]>
-			<input class="stdclick" id="sc_mipexport_abort" name="abortexport" type="submit" value="[% "PLUGIN_SC_WEB_MIPEXPORT_ABORT_BUTTON" | string %]" style="margin-left:10px;"[% IF activelmsscan %] disabled[% END %]>
-		[% END %]
-		<HR><BR>
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_MAIN_DELAY" desc="PLUGIN_SC_WEB_MAIN_DELAYDESC" %]
-		<input type="text" class="stdedit sliderInput_1_30_1" name="sugardelay" id="sugardelay" value="[% prefs.sugardelay %]" size="1">
-		[% END %]
-		[%# Live View Width / Album Art Size / LV+HIS "Icon Position" removed 2026-09-03 (Henk) -   %]
-		[%# no effect in the Material skin (confirmed by Henk). sugarlvwidth/sugarlviconsize only  %]
-		[%# feed old hand-built Classic-skin HTML table rows; sugarlvweight/sugarhisweight (despite%]
-		[%# their "Icon Position" label) actually drive Slim::Plugin::Base->addWeight() - LMS menu %]
-		[%# ordering, not icon position. Prefs stay at their last values (100/50/84/85) as fixed    %]
-		[%# defaults in Plugin.pm - no longer user-adjustable, but nothing else changes.            %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_SHOW_STATS" desc="PLUGIN_SC_WEB_SHOW_STATS_DESC" %]
-			<select name="sugarlvTS" id="sugarlvTS">
-				[% FOREACH option = {
-					'0' => 'Disabled',
-					'1' => 'Enabled',
-				} %]
-					<option [% IF prefs.sugarlvTS == option.key %]selected='selected' [% END %]value="[% option.key %]">[% option.value | html %]</option>
-				[%- END -%]
-			</select>
-		[% END %]	
-		[% WRAPPER settingGroup title="PLUGIN_SC_STATS_RATINGSCALE" desc="PLUGIN_SC_STATS_RATINGSCALE_DESC" %]
-			<select name="rating_10scale" id="rating_10scale">
-				[% FOREACH option = {
-					'0' => '1 to 5',
-					'1' => '1 to 10',
-				} %]
-					<option [% IF prefs.rating_10scale == option.key %]selected='selected' [% END %]value="[% option.key %]">[% option.value | html %]</option>
-				[%- END -%]
-			</select>
-		[% END %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_STATS_USEAPCVALUES" desc="PLUGIN_SC_STATS_USEAPCVALUES_DESC" %]
-			<select name="useapcvalues" id="useapcvalues">
-				[% FOREACH option = {
-					'0' => 'No',
-					'1' => 'Yes',
-				} %]
-					<option [% IF prefs.useapcvalues == option.key %]selected='selected' [% END %]value="[% option.key %]">[% option.value | html %]</option>
-				[%- END -%]
-			</select>
-		[% END %]	
-		[%# "MusicIP Request No. of Tracks" moved to a per-player setting 2026-09-03 (Henk) -      %]
-		[%# see player.html, directly under SugarCube Mix Mode - now also applies to FreeStyle    %]
-		[%# mode, which previously had no track-count control at all.                             %]
-		[% WRAPPER settingGroup title="PLUGIN_SC_WEB_XMAS" desc="PLUGIN_SC_WEB_XMASDESC" %]
-			<input type="checkbox" [% IF prefs.sugarxmas %]checked [% END %] class="stdedit" name="sugarxmas" id="sugarxmas" value="1"/>
-			<label for="enabled" class="stdlabel">[% "PLUGIN_SC_WEB_XMAS" | string %]</label>
-		[% END %]	
-		<br><b>All other settings are Per Player see Player Tab to configure them</b>
-		<br>	
-	[% END %]	
-	<br>This plugin is for your own personal, non-commercial use.
-	<br>
-	<br>
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_TIMEOUT" desc="PLUGIN_SC_WEB_TIMEOUTDESC" %]
+	<input type="text" class="stdedit sliderInput_30_120_5" name="sqlitetimeout" id="sqlitetimeout" value="[% prefs.sqlitetimeout %]" size="2">
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MAIN_DELAY" desc="PLUGIN_SC_WEB_MAIN_DELAYDESC" %]
+	<input type="text" class="stdedit sliderInput_1_30_1" name="sugardelay" id="sugardelay" value="[% prefs.sugardelay %]" size="1">
+[% END %]
+
+[%# Left exactly as it was, hardcoded and in English. It is not a control, and rewording it or   %]
+[%# moving it into strings.txt was not part of this pass.                                       %]
+<br><b>All other settings are Per Player see Player Tab to configure them</b>
+
 [% PROCESS settings/footer.html %]
-
-[%# MIP Export status polling (Henk, 2026-09-02) - ported from the SC-EXTMIP/HB64 builds. Polls    %]
-[%# the generic 'pref' JSON-RPC command for this plugin's own prefs, no dedicated endpoint needed.  %]
-<script type="text/javascript">
-	var sc_mipexport_poll;
-
-	function sc_mipexport_getPref(prefName) {
-		const serverjsonurl = "[% squeezebox_server_jsondatareq %]";
-		let vsBody = JSON.stringify({
-			id: 1,
-			method: 'slim.request',
-			params: ['', ['pref', 'plugin.SugarCube:' + prefName, '?']]
-		});
-
-		fetch(serverjsonurl, {
-			method: "post",
-			headers: { "Content-Type": "application/json", "Origin": window.location.hostname },
-			body: vsBody
-		}).then(function(response) {
-			if (!response.ok) { throw new Error("HTTP error " + response.status); }
-			return response.json();
-		}).then(function(jsonData) {
-			const resultVal = Object.values(jsonData.result)[0];
-			const msg = document.getElementById('sc_mipexport_statusmsg');
-			const btnNow = document.getElementById('sc_mipexport_exportnow');
-
-			if (prefName === 'sc_mipexport_inprogress') {
-				if (resultVal == 1) {
-					if (btnNow) { btnNow.disabled = true; }
-					msg.className = 'sc-mipexport-status sc-mipexport-running';
-					msg.textContent = 'Exporting';
-				} else {
-					if (btnNow) { btnNow.disabled = false; }
-					clearInterval(sc_mipexport_poll);
-					sc_mipexport_getPref('sc_mipexport_result');
-				}
-			} else if (prefName === 'sc_mipexport_result') {
-				msg.className = 'sc-mipexport-status';
-				if (resultVal == 1) {
-					msg.classList.add('sc-mipexport-success');
-					msg.textContent = 'Export completed - success';
-				} else if (resultVal == 2) {
-					msg.textContent = 'Export aborted';
-				} else if (resultVal == 3) {
-					msg.textContent = 'Export completed with errors - check server log for details';
-				} else {
-					msg.textContent = '';
-				}
-			}
-		}).catch(function(error) {
-			console.log(error);
-		});
-	}
-
-	window.addEventListener("load", function() {
-		sc_mipexport_getPref('sc_mipexport_inprogress');
-		sc_mipexport_poll = setInterval(function() {
-			sc_mipexport_getPref('sc_mipexport_inprogress');
-		}, 10000);
-	});
-</script>

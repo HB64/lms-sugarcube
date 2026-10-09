@@ -10,27 +10,32 @@
 [% PROCESS pageheader.html %]
 [% PROCESS plugins/SugarCube/HTML/css/sugarcube.css %]
 
-[%# STEP - Henk, 2026-09-04 (ported from saysaar's SC-EXTMIP build). THIS PAGE MUST NEVER          %]
-[%# NAVIGATE. It used to rewrite its own address every refreshRate seconds with location.replace.  %]
-[%# In Material, Live View is a fullscreen dialog, and rewriting the address is navigation - so     %]
-[%# Material closed the dialog and threw you back to the home page. Material was behaving           %]
-[%# correctly; the page was navigating. location.replace also destroyed the back history. It also   %]
-[%# meant the currently-playing/up-next info never actually refreshed while you stayed on the page  %]
-[%# in Material, since the reload kept getting short-circuited by the dialog closing.               %]
+[%# STEP 5.3, 2026-08-09 - THIS PAGE MUST NEVER NAVIGATE.                                           %]
+[%# It used to rewrite its own address every refreshRate seconds (30 on this server) with           %]
+[%# location.replace. In Material, Live View is a fullscreen dialog, and rewriting the address is   %]
+[%# navigation - so Material closed the dialog and threw you back to the home page. Material was    %]
+[%# behaving correctly; the page was navigating. location.replace also destroyed the back history.  %]
 [%#                                                                                                 %]
 [%# Now the CONTENTS are replaced instead. We ask the server for this same page with ajaxUpdate=1,  %]
 [%# which the guards at the top and bottom of this file already answer by leaving out the page      %]
 [%# furniture, and drop the reply into the div below. Nothing navigates, so Material has nothing to %]
 [%# react to, and the scroll position survives - which a full reload destroyed.                     %]
 [%#                                                                                                 %]
-[%# The transport bar's own script sits OUTSIDE the swapped div on purpose: a script placed by an   %]
-[%# innerHTML assignment is never executed, so it must not be part of what gets replaced.           %]
+[%# The row links are plain onclick attributes, so they still work after the swap.                  %]
+[%# The script sits OUTSIDE the swapped div on purpose: a script placed by an innerHTML assignment  %]
+[%# is never executed, so it must not be part of what gets replaced.                                %]
 	<SCRIPT>
 	var scLvUrl = "[% webroot %][% path %]?player=[% player | uri %][% statisticparameters %]";
 
-	[%# scPlayerCmd - Henk, 2026-09-04 (ported from saysaar's SC-EXTMIP build). Previous/         %]
-	[%# play-pause/next, right here on Live View. Same shape as this plugin's other JSON-RPC      %]
-	[%# calls (a plain slim.request POST to /jsonrpc.js), so no core skin control bar is needed.  %]
+	[%# scPlayerCmd - Henk's request 2026-08-24, transport bar reworked 2026-09-05 (ported from   %]
+	[%# the hoofdmap build). Previous/play-pause/next, right here on Live View. Same shape as the  %]
+	[%# "Use as Next Track" links below (a plain slim.request POST to /jsonrpc.js), so no core     %]
+	[%# skin control bar is needed - after the mess navigating out of this page caused in          %]
+	[%# Material/Squeeze-LX, staying inside SugarCube's own already-proven JSON-RPC pattern is     %]
+	[%# the safer choice.                                                                          %]
+	[%#                                                                                            %]
+	[%# This function sits in the OUTER script, same reasoning as scLvRefresh below it: it is      %]
+	[%# defined once and survives every ajaxUpdate swap, unlike anything placed inside sclvbody.   %]
 	var scPlayerId = "[% player %]";
 
 	function scPlayerCmd(cmd) {
@@ -48,11 +53,186 @@
 		}));
 	}
 
-	[%# scUpdatePlayState - Henk 2026-09-04: the middle button always showed the pause icon,      %]
-	[%# regardless of whether the player was actually playing or paused. Polls the player's own    %]
-	[%# status (mode: play/pause/stop) via the same JSON-RPC pattern as scPlayerCmd, and swaps      %]
-	[%# which of the two pre-rendered SVGs is visible - simple show/hide, not a re-render, so it    %]
-	[%# works whether or not sclvbody happens to be mid-swap at the same moment.                    %]
+	[%# scLvSetStatus - Henk's request 2026-09-12, first piece of the Live View/Quick Settings     %]
+	[%# merge: the Chain (automatic queuing) Enabled/Disabled dropdown below (in sclv-top) calls    %]
+	[%# this on change instead of submitting a form - Live View must never navigate. Reuses the      %]
+	[%# exact same 'sugarcube setting' JSON-RPC dispatch the Jive menu already sends for this same   %]
+	[%# pref (jiveSugarCubeSetting in Plugin.pm already handles a bare sugarcube_status:N set), so    %]
+	[%# no new backend command was needed - just a new caller. scPlayerCmd's own onloadend already   %]
+	[%# calls scLvRefresh(), so the lamp/label re-render from the fresh value within one round trip. %]
+	function scLvSetStatus(val) {
+		scPlayerCmd(['sugarcube', 'setting', 'sugarcube_status:' + val]);
+	}
+
+	[%# scToggleInfo - Henk's request 2026-09-13: the Mood note (PLUGIN_SC_WEB_QS_MOODNOTE, below in the   %]
+	[%# Mix Settings panel's own Mood subsection since the 2026-09-19 merge, formerly its own separate    %]
+	[%# "Mood Batch Settings" panel) used to print as a permanent paragraph - he found it in the           %]
+	[%# way. Same click-to-open info-icon/popover widget as player.html/quicksettings.html (sc-info-wrap/  %]
+	[%# sc-info-icon/sc-info-popover, CSS further down in the <style> block), plus tap/click-outside-      %]
+	[%# closes since that is more natural on a touchscreen than only the popover's own Close button.       %]
+	[%# UPDATE 2026-09-13 (later the same day), two more things Henk found once the icon moved inside     %]
+	[%# <summary> next to the heading: (1) "sluit direct weer als je hem opent" - not an event-bubbling   %]
+	[%# problem after all, the same familiar cause as every earlier Live View flicker bug: the periodic   %]
+	[%# 2-second scLvRefresh tick rebuilds #sclvbody from scratch regardless of an open popover (nothing  %]
+	[%# gated it, unlike scLvScrolling/scLvSelectOpen/scLvSliderActive above), and a freshly rendered      %]
+	[%# popover always starts at its default display:none - so it looked "closed instantly" within up to %]
+	[%# two seconds of opening it. scLvInfoOpen() below is now added to that same skip check. (2) "je     %]
+	[%# moet het scherm zijwaarts scrollen" - <details>/<summary> being far from the left edge changed    %]
+	[%# left:0 (fine when the icon sat alone at the left margin, as it still does on player.html's own    %]
+	[%# per-field icons) into an overflow off the right edge of the screen. Flips to right:0 on open if   %]
+	[%# the left-anchored position would run past the viewport, measured live rather than hard-coded, so  %]
+	[%# it keeps working regardless of exactly where a given icon happens to sit.                         %]
+	function scLvInfoOpen() {
+		var open = false;
+		document.querySelectorAll('.sc-info-popover').forEach(function (p) {
+			if (p.style.display === 'block') { open = true; }
+		});
+		return open;
+	}
+	function scToggleInfo(el) {
+		var pop = el.nextElementSibling;
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p !== pop) { p.style.display = 'none'; }
+		});
+		var opening = (pop.style.display !== 'block');
+		pop.style.left = '0';
+		[%# Henk, 2026-09-19 - reset BOTH directions every time, unconditionally, before measuring:     %]
+		[%# this same popover element can need to open downward one time and upward another (the panel  %]
+		[%# above it can grow/shrink - see the vertical clamp further down), so a leftover inline style  %]
+		[%# from a previous opening must never survive into this one.                                    %]
+		pop.style.top = '100%';
+		pop.style.bottom = 'auto';
+		pop.style.marginTop = '6px';
+		pop.style.marginBottom = '0';
+		pop.style.display = opening ? 'block' : 'none';
+		if (opening) {
+			[%# Henk, 2026-09-13 (yet later the same day) - flipping straight to right:0 (previous       %]
+			[%# attempt) just traded one overflow for the other, since the icon sits somewhere in the    %]
+			[%# middle of the screen now, not pinned to either edge. A single continuous pixel shift on   %]
+			[%# left instead, clamped against BOTH edges (right-edge correction first, then a left-edge   %]
+			[%# correction that always wins if the two ever conflict, since reading the start of the      %]
+			[%# note matters more than reaching its exact end) fits it wherever the icon happens to be.   %]
+			var scInfoMargin = 8;
+			var rect = pop.getBoundingClientRect();
+			var shift = 0;
+			if (rect.right > window.innerWidth - scInfoMargin) {
+				shift = (window.innerWidth - scInfoMargin) - rect.right;
+			}
+			if (rect.left + shift < scInfoMargin) {
+				shift = scInfoMargin - rect.left;
+			}
+			pop.style.left = shift + 'px';
+
+			[%# Henk, 2026-09-19 - the horizontal clamp above has always existed, but nothing ever       %]
+			[%# clamped the VERTICAL direction: a popover only ever opened downward (top:100%), so one    %]
+			[%# whose icon sits low enough on the page (Mix Settings' own new Mood subsection, now near   %]
+			[%# the bottom of a taller panel than before) can run past the bottom of the viewport,        %]
+			[%# forcing a scroll just to reach its own Close button. Flips to opening UPWARD instead      %]
+			[%# whenever there is not enough room below - same idea as the horizontal clamp, other axis.  %]
+			if (rect.bottom > window.innerHeight - scInfoMargin) {
+				pop.style.top = 'auto';
+				pop.style.bottom = '100%';
+				pop.style.marginTop = '0';
+				pop.style.marginBottom = '6px';
+			}
+		}
+	}
+	document.addEventListener('click', function(e) {
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p.style.display === 'block' && !p.closest('.sc-info-wrap').contains(e.target)) {
+				p.style.display = 'none';
+			}
+		});
+	});
+
+	[%# scLvSetPref - Henk's request 2026-09-12, Chain Settings panel (Filter/Recipe/Reject Size/   %]
+	[%# Style/Variety - see the <details id="sclvChainSettings"> block further down). Same idea as    %]
+	[%# scLvSetStatus above, generalised to any pref name/value - but a HASHREF third array element   %]
+	[%# instead of a 'name:value' string, since Filter/Recipe names are free text (could contain a     %]
+	[%# space or, in principle, a colon) and LMS's JSON-RPC layer already accepts a trailing hashref    %]
+	[%# of named params on any request exactly like it accepts 'name:value' strings - no escaping to   %]
+	[%# get wrong this way. jiveSugarCubeSetting (Plugin.pm) reads params by name regardless of which   %]
+	[%# of the two shapes they arrived in, so no backend change was needed for THIS function itself -   %]
+	[%# only for the two new prefs it can now send (sugarcube_filteractive/sugarcube_receipes), which   %]
+	[%# is where the actual new Plugin.pm code is.                                                      %]
+	[%# Henk, 2026-09-12 - THE ACTUAL ROOT CAUSE of the sliders never saving, Filter/Recipe "springing %]
+	[%# back", and the Chain/Mood Settings panels reopening: found via a diagnostic log line in        %]
+	[%# jiveSugarCubeSetting (Plugin.pm) - it WAS being called (the request reached the server), but    %]
+	[%# every single named param came back undef, for every field, every time. The hashref third        %]
+	[%# array element this function sent - ['sugarcube','setting', {sugarcube_style: '40'}] - was       %]
+	[%# never actually being unpacked into named request params by Slim::Control::Request at all. That  %]
+	[%# was a wrong assumption from when this function was first written (documented at the time as     %]
+	[%# "jiveSugarCubeSetting reads params by name regardless of hashref-vs-string shape" - never        %]
+	[%# actually verified against real evidence until now). Every single Chain/Mood Settings field ever %]
+	[%# sent through this function has therefore been silently failing to save since the day it was     %]
+	[%# introduced, whatever the value or field.                                                        %]
+	[%#                                                                                                  %]
+	[%# FIX: use the SAME 'name:value' string format this plugin's own pre-existing Jive menu code       %]
+	[%# already sends successfully elsewhere (see e.g. Plugin.pm's own "sugarcube_style:0" etc. further  %]
+	[%# up in its Jive menu building) - a proven, working mechanism, unlike the hashref guess. Slim::    %]
+	[%# Control::Request splits a term on its FIRST colon into name/value, so a value containing a       %]
+	[%# colon would still come through intact; a MIP filter/recipe name with one is not expected.        %]
+	function scLvSetPref(name, val) {
+		scPlayerCmd(['sugarcube', 'setting', name + ':' + val]);
+	}
+
+	[%# Henk, 2026-09-12 - Chain/Mood Settings <details> open/closed state, THIRD iteration.              %]
+	[%#                                                                                                   %]
+	[%# 1st iteration: client-side only - localStorage + a restore call on both DOMContentLoaded and      %]
+	[%# every ajaxUpdate swap. Survived any single loaded page fine, but "als ik het verlaat en terug ga  %]
+	[%# staan ze weer open" - failed across Squeeze-LX, a phone browser and Firefox alike on a genuine    %]
+	[%# fresh load. Never pinned down exactly why.                                                        %]
+	[%#                                                                                                   %]
+	[%# 2nd iteration: moved server-side (a per-player pref, rendered straight into the <details> tag's   %]
+	[%# own "open" attribute) to sidestep that mystery entirely. Fixed the original complaint, but caused %]
+	[%# a NEW one Henk caught only after also chasing down the runaway-refresh-loop and hashref-params    %]
+	[%# bugs below: a per-player pref is shared by every viewer of that player - closing the panel in     %]
+	[%# Squeeze-LX also closed it in Firefox, on a different screen, possibly for someone else entirely   %]
+	[%# listening on the same player ("stel er zit iemand anders te luisteren en bam..."). This was never %]
+	[%# meant to be shared - it's a per-VIEWER display preference, not a per-PLAYER setting.               %]
+	[%#                                                                                                   %]
+	[%# 3rd iteration (current): back to client-side/localStorage - the right place for this, since nobody %]
+	[%# else's screen should change because of it - but applied differently from the 1st attempt: instead %]
+	[%# of a DOMContentLoaded listener, scLvApplyDetailsState() is called from an inline <script> placed   %]
+	[%# directly after both <details> tags in the markup (see further down) so it runs synchronously in    %]
+	[%# document order, the moment the parser reaches it - no event timing to get wrong, unlike            %]
+	[%# DOMContentLoaded (whatever actually made that unreliable here, this sidesteps it rather than       %]
+	[%# re-relying on it). Also still re-applied after every scLvRefresh ajaxUpdate swap, same as before.  %]
+	[%# The runaway-refresh-loop bug (a toggle firing on the render itself, not just a real click) is a    %]
+	[%# separate, already-fixed problem from THAT investigation - data-scopen still guards against it      %]
+	[%# here, now comparing against localStorage instead of a server pref.                                %]
+	function scLvDetailsToggle(el, key) {
+		var wasOpen = (el.dataset.scopen === '1');
+		var isOpen = el.open;
+		if (isOpen === wasOpen) { return; }
+		el.dataset.scopen = isOpen ? '1' : '0';
+		try { localStorage.setItem(key, isOpen ? '1' : '0'); } catch (e) { [%# private browsing etc. - the panel still works, it just won't remember. %] }
+	}
+
+	var scLvDetailsKeys = [
+		['sclvChainSettings', 'sclv_chainsettings_open']
+		[%# sclvMoodSettings removed 2026-09-19 - Mood moved into sclvChainSettings itself (now labeled %]
+		[%# "Mix Settings"), see the big comment above that <details>. Nothing else used this second   %]
+		[%# entry, so it is simply gone rather than left pointing at an id that no longer exists.       %]
+	];
+	function scLvApplyDetailsState() {
+		for (var i = 0; i < scLvDetailsKeys.length; i++) {
+			var el = document.getElementById(scLvDetailsKeys[i][0]);
+			if (!el) { continue; }
+			var stored;
+			try { stored = localStorage.getItem(scLvDetailsKeys[i][1]); } catch (e) { stored = null; }
+			if (stored === null) { continue; }
+			var wantOpen = (stored === '1');
+			if (el.open !== wantOpen) { el.open = wantOpen; }
+			el.dataset.scopen = wantOpen ? '1' : '0';
+		}
+	}
+
+	[%# scUpdatePlayState - Henk 2026-09-05 (ported from the hoofdmap build). The middle button    %]
+	[%# always showed the pause icon, regardless of whether the player was actually playing or     %]
+	[%# paused. Polls the player's own status (mode: play/pause/stop) via the same JSON-RPC        %]
+	[%# pattern as scPlayerCmd, and swaps which of the two pre-rendered SVGs is visible - simple    %]
+	[%# show/hide, not a re-render, so it works whether or not sclvbody happens to be mid-swap.     %]
 	function scUpdatePlayState() {
 		var r = new XMLHttpRequest();
 		r.open('POST', '/jsonrpc.js', true);
@@ -72,14 +252,15 @@
 					playIcon.style.display = '';
 					pauseIcon.style.display = 'none';
 				}
-				[%# Henk, 2026-09-06 - "een track progressie balkje" op de player balk, ported from    %]
-				[%# SC-EXTMIP. Piggybacked on this same status poll (now runs every second - see the   %]
-				[%# dedicated setInterval below - and on every button press) rather than a separate    %]
-				[%# JSON-RPC call. "time" (elapsed seconds) is a core status field always returned      %]
-				[%# regardless of tags; duration needs the 'd' tag on the current playlist_loop entry.  %]
-				[%# Width is only ever set here, once a second - the CSS transition on #scProgressFill %]
-				[%# (see the <style> block below) is what makes it visually creep forward smoothly in   %]
-				[%# between instead of visibly jumping once a second.                                   %]
+				[%# Henk, 2026-09-06 - "een track progressie balkje" op de player balk. Piggybacked  %]
+				[%# on this same status poll (already runs every second - see the dedicated            %]
+				[%# setInterval below - and on every button press) rather than a separate JSON-RPC     %]
+				[%# call. "time" (elapsed seconds) is a core status field always returned regardless   %]
+				[%# of tags; duration needs the 'd' tag on the current playlist_loop entry, same tag   %]
+				[%# this codebase already uses elsewhere (scShowTracks's own "tags:acdglKN"). Width is %]
+				[%# only ever set here, once a second - the CSS transition on #scProgressFill (see the%]
+				[%# <style> block below) is what makes it visually creep forward smoothly in between   %]
+				[%# instead of visibly jumping once a second.                                          %]
 				var fill = document.getElementById('scProgressFill');
 				if (fill) {
 					var loop = data && data.result && data.result.playlist_loop;
@@ -98,23 +279,170 @@
 		}));
 	}
 
-	[%# Henk, 2026-09-06 - "de queue knop rechtsonder in de player balk" van SC-EXTMIP mag ook naar    %]
-	[%# de hoofdmap versie. scQueueToggle/scQueueRefresh/scQueueAction/scQueueRemove, click-outside-   %]
-	[%# to-close and the panel markup below are ported as-is from SC-EXTMIP's own liveview.html -      %]
-	[%# same JSON-RPC pattern, same panel styling. Living out here in the persistent outer script/     %]
-	[%# HTML, not inside #sclvbody, for the same reason the transport bar does: every scLvRefresh        %]
-	[%# swap rebuilds #sclvbody's innerHTML, which would otherwise close the panel out from under        %]
-	[%# whoever had it open. scQueueOpen tracks that state across refreshes.                             %]
+	[%# scUpdateCoverColor - Henk's request 2026-09-08. "de voortgangsbalk van Material krijgt de   %]
+	[%# kleur van de hoes en verandert per track, die van LV/QS blijft altijd hetzelfde".              %]
+	[%#                                                                                                 %]
+	[%# Henk 2026-09-08 - two failed attempts first: a plain pixel average (muddy brown on a busy      %]
+	[%# cover like Killers - "valt praktisch weg tegen de achtergrond"), then a vibrant-bucket pick     %]
+	[%# on its own (correct dominant color, but "wijkt enorm af van wat Material zelf doet" - a        %]
+	[%# black/white Tears For Fears cover came out grey while Material showed blue). Material          %]
+	[%# doesn't just sample the cover - MaterialSkin/HTML/material/html/js/currentcover.js in the      %]
+	[%# actual lms-material source (github.com/CDrummond/lms-material) does two more things this       %]
+	[%# now copies: (1) if the cover reads as grey - by its plain average OR its Vibrant swatch -       %]
+	[%# it drops the sampled color entirely and uses Material's own fixed default blue, rgb(25,118,     %]
+	[%# 210), rather than showing a colorless bar; (2) otherwise it takes the swatch's HUE only and     %]
+	[%# re-renders it at a fixed HSV value/saturation (0.8235 / capped at 0.8, the same numbers         %]
+	[%# Material's own source uses) so every track reads as the same "family" of tone instead of        %]
+	[%# whatever brightness the source photo happened to have. The vibrant-bucket pick from the        %]
+	[%# previous attempt is kept as the swatch source (a reasonable stand-in for Vibrant.js) - only     %]
+	[%# the post-processing around it changed. Only re-samples when the cover's own src actually        %]
+	[%# changed, since #scCurrentCover is rebuilt from scratch on every ajaxUpdate swap (new element    %]
+	[%# each time) even when the track itself hasn't changed.                                           %]
+	var scLastCoverSrc = '';
+	function scRgb2Hsv(r, g, b) {
+		var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+		var h, s = (mx === 0 ? 0 : d / mx), v = mx / 255;
+		if (mx === mn) { h = 0; }
+		else if (mx === r) { h = ((g - b) + d * (g < b ? 6 : 0)) / (6 * d); }
+		else if (mx === g) { h = ((b - r) + d * 2) / (6 * d); }
+		else { h = ((r - g) + d * 4) / (6 * d); }
+		return [h, s, v];
+	}
+	function scHsv2Rgb(h, s, v) {
+		var i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+		var r, g, b;
+		switch (i % 6) {
+			case 0: r = v; g = t; b = p; break;
+			case 1: r = q; g = v; b = p; break;
+			case 2: r = p; g = v; b = t; break;
+			case 3: r = p; g = q; b = v; break;
+			case 4: r = t; g = p; b = v; break;
+			default: r = v; g = p; b = q; break;
+		}
+		return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+	}
+	function scIsGrey(r, g, b) {
+		return Math.abs(r - g) < 8 && Math.abs(r - b) < 8 && Math.abs(g - b) < 8;
+	}
+	function scUpdateCoverColor() {
+		var img = document.getElementById('scCurrentCover');
+		var fill = document.getElementById('scProgressFill');
+		if (!img || !fill || !img.src || img.src === scLastCoverSrc) { return; }
+		if (!img.complete || img.naturalWidth === 0) {
+			img.onload = scUpdateCoverColor;
+			return;
+		}
+		scLastCoverSrc = img.src;
+		try {
+			var SIZE = 32;
+			var c = document.createElement('canvas');
+			c.width = SIZE;
+			c.height = SIZE;
+			var ctx = c.getContext('2d');
+			ctx.drawImage(img, 0, 0, SIZE, SIZE);
+			var data = ctx.getImageData(0, 0, SIZE, SIZE).data;
+			var STEP = 24;
+			var buckets = {};
+			var rAll = 0, gAll = 0, bAll = 0, nAll = 0;
+			for (var i = 0; i < data.length; i += 4) {
+				var r = data[i], g = data[i + 1], b = data[i + 2];
+				rAll += r; gAll += g; bAll += b; nAll++;
+				var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+				var l = (mx + mn) / 510;
+				if (l < 0.08 || l > 0.92) { continue; }
+				var d = mx - mn;
+				var s = d === 0 ? 0 : d / (255 - Math.abs(mx + mn - 255));
+				var key = Math.round(r / STEP) + '_' + Math.round(g / STEP) + '_' + Math.round(b / STEP);
+				var bucket = buckets[key];
+				if (!bucket) { bucket = buckets[key] = { r: 0, g: 0, b: 0, n: 0, sSum: 0, lSum: 0 }; }
+				bucket.r += r; bucket.g += g; bucket.b += b; bucket.n++;
+				bucket.sSum += s; bucket.lSum += l;
+			}
+			var best = null, bestScore = -1;
+			for (var key2 in buckets) {
+				var bk = buckets[key2];
+				var avgS = bk.sSum / bk.n, avgL = bk.lSum / bk.n;
+				var score = bk.n * avgS * (1 - Math.abs(avgL - 0.5));
+				if (score > bestScore) { bestScore = score; best = bk; }
+			}
+			var avgR = Math.round(rAll / nAll), avgG = Math.round(gAll / nAll), avgB = Math.round(bAll / nAll);
+			var rc, gc, bc;
+			if (best) {
+				rc = Math.round(best.r / best.n); gc = Math.round(best.g / best.n); bc = Math.round(best.b / best.n);
+			}
+			else {
+				rc = avgR; gc = avgG; bc = avgB;
+			}
+			if (scIsGrey(avgR, avgG, avgB) || scIsGrey(rc, gc, bc)) {
+				rc = 25; gc = 118; bc = 210;
+			}
+			else {
+				var hsv = scRgb2Hsv(rc, gc, bc);
+				var rgbOut = scHsv2Rgb(hsv[0], Math.min(hsv[1], 0.8), 0.8235);
+				rc = rgbOut[0]; gc = rgbOut[1]; bc = rgbOut[2];
+			}
+			fill.style.background = 'rgb(' + rc + ',' + gc + ',' + bc + ')';
+			// Henk's request 2026-09-08 - "Material maakt dan ook de balk zelf een paar tinten in
+			// de richting van de lopende balk" - the unfilled track picks up a faint version of
+			// the same color rather than staying plain grey, so the whole bar reads as one tinted
+			// piece instead of a colored sliver on a neutral background.
+			var track = document.getElementById('scProgressTrack');
+			if (track) { track.style.background = 'rgba(' + rc + ',' + gc + ',' + bc + ',0.25)'; }
+			document.documentElement.style.setProperty('--sclv-accent-color', 'rgb(' + rc + ',' + gc + ',' + bc + ')');
+		}
+		catch (e) {}
+	}
+
+	[%# scQueueToggle/scQueueRefresh/scQueueAction - Henk's request 2026-09-05. "It can be handy to  %]
+	[%# see the queue, like in the Material interface" - useful in particular once an SC Batch is    %]
+	[%# playing, since sc_can_act then hides New Chain/Replace Track and there is otherwise no way    %]
+	[%# from Live View to see what's actually queued. Same JSON-RPC pattern as everything else on     %]
+	[%# this page rather than linking to Material's own (client-side, not a plain URL) queue screen.  %]
+	[%#                                                                                                %]
+	[%# The button and panel live in the OUTER script/HTML, same reasoning as the transport bar: if    %]
+	[%# they were inside #sclvbody, every ajaxUpdate refresh (every 2s, or right after any click)      %]
+	[%# would wipe and rebuild them via innerHTML, closing the panel out from under whoever had it     %]
+	[%# open. scQueueOpen tracks state across those refreshes; scQueueRefresh is a no-op while closed. %]
 	var scQueueOpen = false;
 
 	function scQueueToggle() {
 		var panel = document.getElementById('sc-queue-panel');
 		if (!panel) { return; }
 		scQueueOpen = !scQueueOpen;
+		if (scQueueOpen) {
+			[%# Henk, 2026-09-12 - button moved to sclv-top (top-right, next to the menu button),    %]
+			[%# which is position:sticky, not a fixed corner of the transport bar anymore - so unlike %]
+			[%# before, there is no single fixed CSS offset that always lines up under the button      %]
+			[%# (sticky can be pinned at the top of the viewport, or sitting inline further down,       %]
+			[%# depending on scroll). getBoundingClientRect is always viewport-relative regardless of   %]
+			[%# that, same coordinate space position:fixed uses for top/right - so the panel is placed  %]
+			[%# from the button's actual on-screen position each time it opens, rather than guessed      %]
+			[%# once from a fixed constant.                                                              %]
+			var btn = document.getElementById('scQueueBtn');
+			if (btn) {
+				var r = btn.getBoundingClientRect();
+				var scQueueTop = Math.round(r.bottom + 6);
+				panel.style.top = scQueueTop + 'px';
+				panel.style.right = Math.round(document.documentElement.clientWidth - r.right) + 'px';
+				panel.style.bottom = 'auto';
+				[%# 76 = the transport bar/progress strip's own 68px (see their shared CSS comment      %]
+				[%# further up) plus a small bottom margin - opening downward can run the panel into     %]
+				[%# that fixed bar on a short screen if max-height stays a flat 60vh, the same way        %]
+				[%# max-height:45vh once ran the OLD accordion into it before the 2026-09-12 redesign.    %]
+				panel.style.maxHeight = Math.max(120, Math.round(window.innerHeight - scQueueTop - 76)) + 'px';
+			}
+		}
 		panel.style.display = scQueueOpen ? 'block' : 'none';
 		if (scQueueOpen) { scQueueRefresh(); }
 	}
 
+	[%# Click-outside-to-close, Henk 2026-09-05 - "kan het kruis weg en zo gemaakt worden dat als je %]
+	[%# ergens buiten die lijst klikt hij sluit, net als de echte queue". One listener on the whole   %]
+	[%# document, added once here in the persistent outer script (not inside #sclvbody, for the same %]
+	[%# reason everything else queue-related lives out here - it must survive every ajaxUpdate swap). %]
+	[%# Skips closing when the click landed on the panel itself or on the toggle button: the toggle   %]
+	[%# button's own onclick already opens/closes it, so this listener would otherwise immediately     %]
+	[%# re-close a panel that button click had just opened, since both fire on the same click event.  %]
 	document.addEventListener('click', function(e) {
 		if (!scQueueOpen) { return; }
 		var panel = document.getElementById('sc-queue-panel');
@@ -146,20 +474,35 @@
 				var esc = function(s) {
 					return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 				};
+				[%# scDuration/scStars - Henk 2026-09-05, matching Material's own queue more closely %]
+				[%# ("mhhh niet dezelfde info!") - duration as m:ss, rating as filled/empty stars     %]
+				[%# on the same 0-100 scale this codebase's own "Rating: NN" fields elsewhere already %]
+				[%# use for the current/next track (see currentrat/comingupnextrat) - dividing by 20   %]
+				[%# gives the usual 0-5 stars.                                                         %]
 				var scDuration = function(sec) {
 					sec = Math.round(parseFloat(sec) || 0);
 					var m = Math.floor(sec / 60), s = sec % 60;
 					return m + ':' + (s < 10 ? '0' : '') + s;
 				};
-				[%# Filled/empty star via String.fromCharCode (9733/9734), not a literal character - %]
-				[%# SC-EXTMIP's own version hit mojibake with a literal character here; a pure-ASCII    %]
-				[%# source builds the real glyph at runtime instead, regardless of this file's own      %]
-				[%# encoding.                                                                            %]
+				[%# scStars, Henk 2026-09-05 - always returns 5 characters now (all empty for an     %]
+				[%# unrated track) instead of returning '' below rating 0. Henk noticed stars looking %]
+				[%# "not always visible" and first suspected a layout bug from the smaller covers/     %]
+				[%# narrower list, but confirmed on closer look those were simply unrated tracks -      %]
+				[%# an early '' return meant that line just wasn't drawn at all for them, unlike this  %]
+				[%# codebase's own "Rating: Not Rated" convention elsewhere, which states it plainly    %]
+				[%# rather than omitting the row. Five empty stars reads the same way and also keeps    %]
+				[%# every row's height consistent instead of unrated rows being one line shorter.       %]
 				var scStars = function(rating) {
 					rating = parseFloat(rating) || 0;
 					var full = Math.round(rating / 20);
 					var out = '';
-					for (var k = 0; k < 5; k++) { out += String.fromCharCode(k < full ? 9733 : 9734); }
+					[%# Filled/empty star as JS escapes (\u2605/\u2606), not literal characters, Henk        %]
+					[%# 2026-09-05 - "er gaat wel iets mis in de teksten". The literal characters were   %]
+					[%# coming out as mojibake (an encoding mismatch somewhere between this template     %]
+					[%# file and how the page gets served/decoded) - an escape sequence is plain ASCII   %]
+					[%# in the source, so the browser's JS engine builds the real character at runtime    %]
+					[%# instead of the file's encoding having any say in it.                              %]
+					for (var k = 0; k < 5; k++) { out += (k < full) ? '\u2605' : '\u2606'; }
 					return out;
 				};
 				var html = '';
@@ -170,6 +513,13 @@
 						: (t.coverid ? ('/music/' + t.coverid + '/cover_300x300_f.jpg') : '');
 					var albumYear = t.album ? (esc(t.album) + (t.year ? ' (' + t.year + ')' : '')) : '';
 					var stars = scStars(t.rating);
+					[%# Three separate stacked lines (title/artist/album), Henk 2026-09-05 - "in de   %]
+					[%# echte queue is de titel vet gedrukt en zijn artiest en album iets kleiner" -    %]
+					[%# was one combined "artist - album (year)" line before. Title is now always bold %]
+					[%# (not just on the current row - the current row is still marked, by its own      %]
+					[%# background tint further down), matching Material's own weighting. Duration and %]
+					[%# the star rating move to their own small stacked column on the right, same as    %]
+					[%# Material's queue, instead of crowding a fourth line into the text column.        %]
 					html += '<div style="display:flex; align-items:center; gap:10px; padding:8px 10px;'
 						+ 'border-bottom:1px solid var(--list-item-border-color, rgba(128,128,128,0.25));'
 						+ (isCur ? 'background:rgba(128,128,128,0.18);' : '') + '">'
@@ -184,6 +534,11 @@
 						+ (t.duration ? '<div style="font-size:0.85em; opacity:0.7;">' + scDuration(t.duration) + '</div>' : '')
 						+ '<div style="font-size:0.8em; opacity:0.8; letter-spacing:1px;">' + stars + '</div>'
 						+ '</div>'
+						[%# Move up/down buttons removed, Henk 2026-09-05 - "mogen weg, alleen de       %]
+						[%# verwijder knop laten staan". scQueueMove/scQueueMove-triggering 'playlist    %]
+						[%# move' command stays intact server-side (scQueueMove function above, still    %]
+						[%# reachable if a future request brings reordering back) - only these two       %]
+						[%# buttons are gone from the row.                                                %]
 						+ '<button type="button" onclick="scQueueRemove(' + i + ')" class="sc-livebtn-icon" style="width:26px; height:26px; flex:none;" title="Remove" aria-label="Remove">'
 						+ '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.3 5.71L12 12.01l-6.3-6.3-1.4 1.4 6.3 6.3-6.3 6.3 1.4 1.4 6.3-6.3 6.3 6.3 1.4-1.4-6.3-6.3 6.3-6.3z"/></svg></button>'
 						+ '</div>';
@@ -192,6 +547,13 @@
 			}
 			catch (e) {}
 		};
+		[%# THE TAGS PARAM MUST BE THE COLON STRING FORM, "tags:xxx" - NOT a {tags:"xxx"} object.      %]
+		[%# Henk 2026-09-05: the first version of this panel used {tags:'a'}, which LMS's JSON-RPC     %]
+		[%# status command silently ignores (no error, just falls back to bare title-only results) -   %]
+		[%# every row showed a title and nothing else, no artist, no art, no duration. quicksettings.  %]
+		[%# html's own scShowTracks already does this correctly ("tags:acdglKN") for its Current/Next  %]
+		[%# panel - copied that exact proven string here and extended it with y (year) and R (rating)  %]
+		[%# to also match what Material's own queue view shows.                                        %]
 		r.send(JSON.stringify({
 			id: 1,
 			method: 'slim.request',
@@ -215,39 +577,296 @@
 	}
 
 	function scQueueRemove(index) { scQueueAction(['playlist', 'delete', index]); }
+	function scQueueMove(from, to) { scQueueAction(['playlist', 'move', from, to]); }
 
-	// scLvAppliedSeq - Henk, 2026-09-04. scLvRefresh can have several requests in flight at once
-	// (the setInterval, the staggered catch-up retries, and the refresh every button press
-	// triggers), and nothing guarantees they land back in the order they were sent. A slow, stale
-	// reply arriving after a fresher one used to overwrite it - showing Currently Playing / Coming
-	// Up Next / the MIP recommendations table, then blanking them out again a moment later. Each
-	// request now carries its own sequence number, and a reply is only applied if no later
-	// request's reply has already been applied - a straggler is simply dropped.
-	var scLvSeq = 0;
-	var scLvAppliedSeq = 0;
+	[%# sclv-menu, REPLACED 2026-09-12 (Henk) - menu button + full-height overlay panels instead of   %]
+	[%# the 2026-09-11 accordion (see sclv-menu CSS comment above for the full "why"). Only one       %]
+	[%# panel id is tracked now (scLvOpenPanelId) instead of walking every <details>, since at most    %]
+	[%# one .sclv-panel is ever open (the dropdown menu closes itself before opening a panel, and     %]
+	[%# scLvPanelClose closes whichever one is open). Same state-loss problem as before though: an    %]
+	[%# ajaxUpdate replaces #sclvbody's innerHTML wholesale, so the open panel and its scrolled        %]
+	[%# position are both lost unless re-applied by id after the swap, same as the old code did for   %]
+	[%# the accordion's open/scrollTop state.                                                          %]
+	var scLvPanelIds = ['sclvPanelMip', 'sclvPanelHistory'];
+	var scLvOpenPanelId = null;
+	[%# Henk, 2026-09-12 - "klapt na een paar seconden dicht als je te lang wacht met iets kiezen":  %]
+	[%# scLvOpenPanelId only ever tracked the PANEL, never whether the dropdown itself was open, so  %]
+	[%# a scLvRefresh tick landing while the dropdown was open replaced #sclvbody's innerHTML (a      %]
+	[%# fresh sclvMenuDropdown, display:none by its own CSS default) with nothing re-opening it -     %]
+	[%# same class of bug the panel state already had to be fixed for, just not yet applied to the   %]
+	[%# dropdown too. Tracked the same way: a plain flag, restored after the swap below.              %]
+	var scLvMenuOpen = false;
+
+	function scLvMenuToggle() {
+		var dd = document.getElementById('sclvMenuDropdown');
+		if (!dd) { return; }
+		scLvMenuOpen = !scLvMenuOpen;
+		dd.style.display = scLvMenuOpen ? 'block' : 'none';
+	}
+	document.addEventListener('click', function (e) {
+		var dd = document.getElementById('sclvMenuDropdown');
+		var btn = document.getElementById('sclvMenuBtn');
+		if (!dd || dd.style.display !== 'block') { return; }
+		if (dd.contains(e.target)) { return; }
+		if (btn && btn.contains(e.target)) { return; }
+		dd.style.display = 'none';
+		scLvMenuOpen = false;
+	});
+	function scLvPanelOpen(name) {
+		var dd = document.getElementById('sclvMenuDropdown');
+		if (dd) { dd.style.display = 'none'; }
+		scLvMenuOpen = false;
+		var id = (name === 'history') ? 'sclvPanelHistory' : 'sclvPanelMip';
+		var el = document.getElementById(id);
+		if (el) { el.classList.add('open'); }
+		scLvOpenPanelId = id;
+	}
+	function scLvPanelClose() {
+		for (var pi = 0; pi < scLvPanelIds.length; pi++) {
+			var pel = document.getElementById(scLvPanelIds[pi]);
+			if (pel) { pel.classList.remove('open'); }
+		}
+		scLvOpenPanelId = null;
+	}
+
+	[%# Henk, 2026-09-12 - "het scrollen in de lijsten gaat niet vloeiend, zowel op de PC als        %]
+	[%# Mobiel": every scLvRefresh tick (every refresh*refreshRate - 2s on this build, see            %]
+	[%# Plugin.pm) replaced #sclvbody's innerHTML wholesale NO MATTER WHAT, panel/menu state           %]
+	[%# preserved or not. Rebuilding the entire candidate/history list's DOM out from under an         %]
+	[%# in-progress scroll or swipe is exactly what reads as stutter - it resets the browser's own     %]
+	[%# scroll momentum mid-motion, worst on mobile's inertial scrolling where a rebuild lands          %]
+	[%# mid-flick more often than not.                                                                  %]
+	[%#                                                                                                 %]
+	[%# Fix: track "is the user actively scrolling right now" and skip THIS tick's body swap while     %]
+	[%# that is true - the lightweight status polls below (play state/cover colour/queue) still run    %]
+	[%# regardless, and the very next tick, 2s later, applies the latest content once scrolling has     %]
+	[%# settled - nothing is lost, only briefly deferred, same trade Henk already accepted for the      %]
+	[%# panel-state preservation above.                                                                 %]
+	[%#                                                                                                 %]
+	[%# scroll does not bubble, but it IS still visible to a CAPTURING listener on an ancestor - one    %]
+	[%# such listener on document keeps working across every ajaxUpdate rebuild, unlike a listener      %]
+	[%# attached directly to a .sclv-panel-body, which gets thrown away with the old DOM each swap.     %]
+	var scLvScrolling = false;
+	var scLvScrollTimer = null;
+	function scLvMarkScrolling() {
+		scLvScrolling = true;
+		if (scLvScrollTimer) { clearTimeout(scLvScrollTimer); }
+		scLvScrollTimer = setTimeout(function () { scLvScrolling = false; }, 500);
+	}
+	window.addEventListener('scroll', scLvMarkScrolling, { passive: true });
+	document.addEventListener('scroll', function (e) {
+		if (e.target && e.target.classList && e.target.classList.contains('sclv-panel-body')) {
+			scLvMarkScrolling();
+		}
+	}, true);
+
+	[%# Henk, 2026-09-12 - "ik zie dat het enabled menu last heeft van de 2 seconden verversing":     %]
+	[%# same root cause as the scroll stutter above and the menu-dropdown-closing bug before that -    %]
+	[%# the sc_on <select> lives inside #sclvbody too, so a scLvRefresh tick landing while it is open  %]
+	[%# (or merely focused) replaces its DOM out from under the user mid-interaction. focusin/focusout %]
+	[%# (the bubbling equivalents of focus/blur) work here without a capturing listener, unlike        %]
+	[%# scroll - so this is a plain listener on document, matching the panel-open tracking further up.  %]
+	[%#                                                                                                 %]
+	[%# Henk, 2026-09-12 (later the same day) - "in Chain settings kan ik de menu's ook niet goed        %]
+	[%# openen (2 seconden verversing)": this only ever checked e.target.id === 'sclvChainStatus', the  %]
+	[%# one <select> that existed when it was written - the five added afterwards for Chain/Mood        %]
+	[%# Settings (Filter/Recipe/Seed Mood/Batch Filter/Batch Recipe) were never covered, so THEIR        %]
+	[%# dropdowns still got replaced out from under an open selection every 2 seconds. Checking          %]
+	[%# e.target.tagName === 'SELECT' instead of one fixed id, same reasoning as scLvSliderActive        %]
+	[%# below checking e.target.type rather than an id list - covers every <select> on the page, this    %]
+	[%# one included, and any future one added the same way without another edit here.                  %]
+	var scLvSelectOpen = false;
+	document.addEventListener('focusin', function (e) {
+		if (e.target && e.target.tagName === 'SELECT') { scLvSelectOpen = true; }
+	});
+	document.addEventListener('focusout', function (e) {
+		if (e.target && e.target.tagName === 'SELECT') { scLvSelectOpen = false; }
+	});
+
+	[%# Henk, 2026-09-13 - "als je in de pagina de setting verandert ... zie je dat pas als je een  %]
+	[%# chain start of de pagina verlaat": a native <select> keeps document focus after you pick an %]
+	[%# option - clicking an item closes the popup list but does NOT fire focusout, sometimes not   %]
+	[%# until you click something else entirely. So after changing sclvChainStatus (or any of the    %]
+	[%# five Chain/Mood Settings dropdowns), scLvSelectOpen stayed true long after the choice was    %]
+	[%# already made AND already saved (the onchange fires the AJAX save immediately, regardless of  %]
+	[%# focus) - every scLvRefresh tick kept skipping the rebuild, so the lamp/label/DSTM line never  %]
+	[%# caught up until something else happened to blur the select (starting a chain, leaving the    %]
+	[%# page). The guard only ever needed to protect the OPEN POPUP LIST itself from being yanked      %]
+	[%# away mid-choice - by the time 'change' fires that popup is already closed and the new value   %]
+	[%# already committed, so clearing the guard right then is safe and lets the very next tick (up   %]
+	[%# to 2s later) show the real state, same as focusout would once the user eventually clicks      %]
+	[%# elsewhere anyway.                                                                             %]
+	document.addEventListener('change', function (e) {
+		if (e.target && e.target.tagName === 'SELECT') { scLvSelectOpen = false; }
+	});
+
+	[%# Henk, 2026-09-12 - "de sliders in de settings verversen iedere keer en springen dan terug":  %]
+	[%# the exact same root cause as sc_on's own <select> above (and the scroll stutter before that)  %]
+	[%# - the Chain/Mood Settings range inputs (sclvRejectSize/sclvStyle/sclvVariety and their batch    %]
+	[%# counterparts) live inside #sclvbody too, so a scLvRefresh tick landing mid-drag (or merely     %]
+	[%# while the slider still has focus after release, same as the select above) rebuilds them from   %]
+	[%# scratch at whatever value Plugin.pm last had, snapping the handle back. Checking e.target.type  %]
+	[%# rather than a fixed id list, unlike sclvChainStatus above, since there are six of these and any %]
+	[%# future slider added the same way is covered automatically without another edit here.            %]
+	var scLvSliderActive = false;
+	document.addEventListener('focusin', function (e) {
+		if (e.target && e.target.type === 'range') { scLvSliderActive = true; }
+	});
+	document.addEventListener('focusout', function (e) {
+		if (e.target && e.target.type === 'range') { scLvSliderActive = false; }
+	});
+
+	[%# Henk's request 2026-09-13 - "de sliders verschieten zo gauw je er ook maar met de vingers      %]
+	[%# tegen aan komt... je krijgt dan een andere setting": a touchscreen's native <input type=range>  %]
+	[%# behaviour jumps the value straight to wherever you tap the track, not just the handle - an     %]
+	[%# imprecise or accidental tap (e.g. while scrolling past one) silently changes a real setting.   %]
+	[%# FIRST fix tried (arm on first touch, act on the second) failed real testing: two accidental     %]
+	[%# taps in a row while scrolling both count as "a touch". SECOND fix tried (touch-action:pan-y +   %]
+	[%# only preventDefault once a drag is confirmed) ALSO failed real testing - "in eerste instantie   %]
+	[%# moet je heel bewust verslepen maar dan blijft het actief en een kleine aanraking laat het       %]
+	[%# verspringen": touch-action only governs the browser's own scroll/zoom handling, it turns out it %]
+	[%# does nothing to stop a range input's native "tap sets the value" default action, which fires    %]
+	[%# right at touchstart - by the time our old code saw a touchmove to decide drag-vs-scroll, the    %]
+	[%# native jump had already happened (the first deliberate drag only "worked" by accident: it moved %]
+	[%# far enough that our own value-setting overwrote the jump before the eye could catch it - a light%]
+	[%# touch afterwards never travelled far enough to get overwritten, so the native jump stood).       %]
+	[%#                                                                                                 %]
+	[%# THIRD, real fix: preventDefault on touchstart itself, unconditionally, for every touch landing   %]
+	[%# on one of these six sliders (sclvRejectSize/sclvStyle/sclvVariety and their batch counterparts). %]
+	[%# That fully blocks the native jump, but it also blocks the browser's OWN scrolling for that same  %]
+	[%# touch (preventDefault does not distinguish "this was a drag" from "this was meant as a scroll"), %]
+	[%# so scrolling has to be reimplemented by hand for exactly this case: scLvScrollParent walks up    %]
+	[%# to whichever ancestor actually scrolls (a Chain/Mood Settings panel's own scrollable body, or    %]
+	[%# the whole page as a fallback) and its scrollTop is nudged directly by the same pixel amount the  %]
+	[%# finger moved, for as long as the gesture reads as more vertical than horizontal. Only once a     %]
+	[%# gesture reads as more horizontal than vertical (past scDragThreshold px either way) does it      %]
+	[%# commit to being a slider drag instead - from that point the value tracks the finger's absolute   %]
+	[%# position directly (same feel as the native behaviour this replaces), and focus() only fires      %]
+	[%# then too, so scLvSliderActive above still gates the periodic refresh for the same window it      %]
+	[%# always did. input/change DOM events are dispatched by hand so the existing oninput/onchange      %]
+	[%# attributes already on each slider (unchanged) keep firing exactly as before - only the touch     %]
+	[%# layer changed. Mouse/click on desktop is untouched, since Henk only reported this on mobile.     %]
+	[%# One known trade-off: the manual scroll below has no native momentum/fling once you lift your     %]
+	[%# finger, unlike scrolling that never touched a slider - acceptable since these panels are short.  %]
+	function scLvScrollParent(el) {
+		var node = el.parentElement;
+		while (node && node !== document.body) {
+			var oy = getComputedStyle(node).overflowY;
+			if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) { return node; }
+			node = node.parentElement;
+		}
+		return document.scrollingElement || document.documentElement;
+	}
+	var scDragThreshold = 8;
+	var scLvDrag = null;
+	document.addEventListener('touchstart', function (e) {
+		var el = e.target;
+		if (!el || el.type !== 'range') { return; }
+		e.preventDefault();
+		var t = e.touches[0];
+		scLvDrag = {
+			el: el,
+			startX: t.clientX,
+			startY: t.clientY,
+			lastY: t.clientY,
+			rect: el.getBoundingClientRect(),
+			scrollEl: scLvScrollParent(el),
+			min: parseFloat(el.min) || 0,
+			max: parseFloat(el.max) || 100,
+			step: parseFloat(el.step) || 1,
+			confirmed: false,
+			rejected: false
+		};
+	}, { passive: false });
+	document.addEventListener('touchmove', function (e) {
+		if (!scLvDrag) { return; }
+		e.preventDefault();
+		var t = e.touches[0];
+		var dx = t.clientX - scLvDrag.startX;
+		var dy = t.clientY - scLvDrag.startY;
+		if (!scLvDrag.confirmed && !scLvDrag.rejected) {
+			if (Math.abs(dx) < scDragThreshold && Math.abs(dy) < scDragThreshold) { return; }
+			if (Math.abs(dy) > Math.abs(dx)) { scLvDrag.rejected = true; }
+			else { scLvDrag.confirmed = true; scLvDrag.el.focus(); }
+		}
+		if (scLvDrag.rejected) {
+			scLvDrag.scrollEl.scrollTop += (scLvDrag.lastY - t.clientY);
+			scLvDrag.lastY = t.clientY;
+			return;
+		}
+		var pct = (t.clientX - scLvDrag.rect.left) / scLvDrag.rect.width;
+		pct = Math.max(0, Math.min(1, pct));
+		var raw = scLvDrag.min + pct * (scLvDrag.max - scLvDrag.min);
+		var stepped = Math.round(raw / scLvDrag.step) * scLvDrag.step;
+		stepped = Math.max(scLvDrag.min, Math.min(scLvDrag.max, stepped));
+		if (String(scLvDrag.el.value) !== String(stepped)) {
+			scLvDrag.el.value = stepped;
+			scLvDrag.el.dispatchEvent(new Event('input', { bubbles: true }));
+		}
+	}, { passive: false });
+	document.addEventListener('touchend', function () {
+		if (scLvDrag && scLvDrag.confirmed) {
+			scLvDrag.el.dispatchEvent(new Event('change', { bubbles: true }));
+		}
+		scLvDrag = null;
+	});
+
+	[%# Henk, 2026-09-12 - "kan de menu's niet meer sluiten": closing a Chain/Mood Settings panel   %]
+	[%# now saves its open/closed state via scLvSetPref, whose scPlayerCmd fires an IMMEDIATE        %]
+	[%# scLvRefresh() as soon as the save completes (see scPlayerCmd/scLvSetPref above). That extra  %]
+	[%# refresh can overlap with the independent periodic setInterval(scLvRefresh, ...) tick: if a   %]
+	[%# periodic request was already in flight (reading the OLD, still-open state) and its response  %]
+	[%# happens to land after the toggle's own refresh, it would overwrite the just-closed panel     %]
+	[%# with stale HTML, making the close look like it "didn't take". scLvRefreshGen guards against  %]
+	[%# this generically: each call stamps its own generation number, and a response only gets       %]
+	[%# applied if no newer call has been dispatched since - any now-superseded response (whichever  %]
+	[%# order it actually arrives in) is silently discarded instead of being allowed to clobber the   %]
+	[%# DOM with out-of-date state.                                                                  %]
+	var scLvRefreshGen = 0;
 	function scLvRefresh() {
-		var seq = ++scLvSeq;
+		var scLvMyGen = ++scLvRefreshGen;
 		var r = new XMLHttpRequest();
-		// Cache-bust with a timestamp, Henk 2026-09-04 - without it, the staggered quick retries
-		// below all hit the exact same URL within a few seconds of each other, and some browsers
-		// serve the first (stale, N/A) response straight from HTTP cache for the rest instead of
-		// actually asking the server again. This is a GET to a page that changes every second, so
-		// it must never be cached.
-		r.open('GET', scLvUrl + '&ajaxUpdate=1&_=' + Date.now(), true);
+		r.open('GET', scLvUrl + '&ajaxUpdate=1', true);
 		r.onloadend = function () {
-			if (seq <= scLvAppliedSeq) { return; }    // a fresher reply already won, drop this one
-			scLvAppliedSeq = seq;
+			if (scLvMyGen !== scLvRefreshGen) {
+				[%# Stale - a newer scLvRefresh() call has been dispatched since this one went out. %]
+				return;
+			}
 			var b = document.getElementById('sclvbody');
-			if (r.status == 200 && b) { b.innerHTML = r.responseText; }
-			// Piggyback the play/pause icon state on every content refresh, Henk 2026-09-04 - one
-			// less thing to separately schedule, and it means the icon stays in sync on the same
-			// cadence as the rest of the page.
+			if (r.status == 200 && b) {
+				if (scLvScrolling || scLvSelectOpen || scLvSliderActive || scLvInfoOpen()) {
+					[%# Skip this tick's rebuild entirely - see scLvMarkScrolling/scLvSelectOpen/         %]
+					[%# scLvSliderActive/scLvInfoOpen above.                                             %]
+				} else {
+					var scPanelBeforeEl = scLvOpenPanelId ? document.getElementById(scLvOpenPanelId) : null;
+					var scPanelBodyBefore = scPanelBeforeEl ? scPanelBeforeEl.querySelector('.sclv-panel-body') : null;
+					var scPanelScrollBefore = scPanelBodyBefore ? scPanelBodyBefore.scrollTop : 0;
+
+					b.innerHTML = r.responseText;
+					scLvApplyDetailsState();
+
+					if (scLvOpenPanelId) {
+						var scPanelAfterEl = document.getElementById(scLvOpenPanelId);
+						if (scPanelAfterEl) {
+							scPanelAfterEl.classList.add('open');
+							var scPanelBodyAfter = scPanelAfterEl.querySelector('.sclv-panel-body');
+							if (scPanelBodyAfter && scPanelScrollBefore) { scPanelBodyAfter.scrollTop = scPanelScrollBefore; }
+						}
+					}
+					if (scLvMenuOpen) {
+						var scDdAfter = document.getElementById('sclvMenuDropdown');
+						if (scDdAfter) { scDdAfter.style.display = 'block'; }
+					}
+				}
+			}
 			if (window.scUpdatePlayState) { scUpdatePlayState(); }
+			if (window.scUpdateCoverColor) { scUpdateCoverColor(); }
 			if (window.scQueueRefresh) { scQueueRefresh(); }
 		};
 		r.send();
 	}
 	scUpdatePlayState();
+	scUpdateCoverColor();
 	[%# Henk, 2026-09-06 - dedicated 1s interval just for the progress bar/play-state poll,           %]
 	[%# independent of scLvRefresh's own (user-configurable, often much slower) refreshRate. That     %]
 	[%# heavier call re-renders the whole page content; this one is a single lightweight status       %]
@@ -258,86 +877,93 @@
 [% IF refresh > 0 %]
 	setInterval(scLvRefresh, [% refresh %] * [% refreshRate %]);
 [% END %]
-	// Staggered catch-up retries, Henk 2026-09-04. Landing here straight after Start a Mix (via
-	// quickplay's 3-second splash), the MIP request that builds the recommendations is still
-	// async and has not landed yet - so the very first render shows N/A until the next scheduled
-	// refresh, which could be a full refreshRate (or the 10s floor) away. Same fix quicksettings.html
-	// already uses for the exact same race (see scShowTracks there): a few quick extra refreshes
-	// right after load to catch up as soon as the async response lands, instead of waiting.
+	[%# Staggered catch-up retries, Henk 2026-09-05 (ported from the hoofdmap build). Clicking       %]
+	[%# "Start New Chain"/"Replace Track" fires an ASYNC MusicIP request - the very first            %]
+	[%# scLvRefresh (called right when the click's own XHR completes) usually lands before MIP has   %]
+	[%# actually answered, so it shows the old/waiting state. Without this, the page then waits a     %]
+	[%# full refreshRate tick before trying again, which read as "nothing happened" even after the   %]
+	[%# refreshRate fix above. A few quick extra refreshes catch up as soon as the async reply        %]
+	[%# lands, instead of waiting for the next scheduled tick.                                        %]
 	setTimeout(scLvRefresh, 900);
 	setTimeout(scLvRefresh, 2200);
 	setTimeout(scLvRefresh, 4500);
 	</SCRIPT>
 
-	[%# Track progress bar, Henk's request 2026-09-06, ported from SC-EXTMIP - visual only (no    %]
-	[%# seek/click-to-jump). A thin strip sitting right above the 64px transport bar rather than    %]
-	[%# overlapping it, so it adds its own small sliver of height instead of eating into the bar's   %]
-	[%# own layout. #scProgressFill's width is only ever set once a second, by scUpdatePlayState     %]
-	[%# above - the CSS transition below is what makes it creep forward smoothly in between those    %]
-	[%# updates instead of visibly jumping.                                                          %]
-	<div style="position:fixed; left:0; right:0; bottom:64px; height:4px; z-index:1000; background:rgba(128,128,128,0.3);">
+	[%# Track progress bar, Henk's request 2026-09-06 - "een track progressie balkje" on the        %]
+	[%# player bar, visual only (no seek/click-to-jump - Henk's choice, kept simple). A thin strip   %]
+	[%# sitting right above the 64px transport bar rather than overlapping it, so it adds its own    %]
+	[%# small sliver of height instead of eating into the bar's own layout. #scProgressFill's width  %]
+	[%# is only ever set once a second, by scUpdatePlayState above - the CSS transition below is     %]
+	[%# what makes it creep forward smoothly in between those updates instead of visibly jumping.    %]
+	<div id="scProgressTrack" style="position:fixed; left:0; right:0; bottom:64px; height:4px; z-index:1000; background:rgba(128,128,128,0.3);">
 		<div id="scProgressFill" style="height:100%; width:0%; background:var(--text-color, #e0e0e0); transition:width 0.9s linear;"></div>
 	</div>
 
-	[%# Fixed transport bar, Henk, 2026-09-04. Icon-only Previous/Play-Pause/Next, centered,     %]
-	[%# sized to match Material's own bottom player bar height rather than saysaar's taller       %]
-	[%# text-labelled version - Material's own bottom bar is hidden behind its fullscreen dialog   %]
-	[%# while any plugin page is open, so this is SugarCube's own stand-in.                        %]
-	[%# Bar height brought down to match Material's own bottom player bar, Henk 2026-09-04 (was     %]
-	[%# 88px, overshot after the icon-size fight - 64px is a normal compact player-bar height).     %]
+	[%# Fixed transport bar, Henk's request 2026-08-24, reworked 2026-09-05 (ported from the       %]
+	[%# hoofdmap build) to icon-only Previous/Play-Pause/Next, centered and sized to match          %]
+	[%# Material's own bottom player bar height. "Start New Chain" moved out of this bar and onto   %]
+	[%# its own icon button under the Currently Playing cover below - see sc_can_act - since that   %]
+	[%# action needs to disappear during a batch/album, unlike Previous/Play/Next which always work.%]
+	[%# Material's own bottom bar is hidden behind its fullscreen dialog while any plugin page is   %]
+	[%# open; this is SugarCube's own stand-in, reached the same JSON-RPC way as everything else.   %]
+	[%#                                                                                                %]
+	[%# Queue button REMOVED FROM HERE 2026-09-12 (Henk) - moved up to sclv-top, top-right, next to    %]
+	[%# the menu button (see that comment for the full reasoning). The left-hand spacer that used to   %]
+	[%# balance it is gone too - back to plain justify-content:center now that nothing else sits in    %]
+	[%# this bar, same as before the Queue button was ever added here on 2026-09-05.                   %]
 	<div style="position:fixed; left:0; right:0; bottom:0; z-index:1000; height:64px; box-sizing:border-box;
 		background:var(--background-color, #424242); border-top:1px solid var(--list-item-border-color, rgba(255,255,255,0.15));
-		display:flex; align-items:center; justify-content:space-between; padding:0 8px;">
-		[%# Henk, 2026-09-06 - left-hand spacer, ported from SC-EXTMIP alongside the queue button:    %]
-		[%# matches the queue button's own width so justify-content:space-between still leaves         %]
-		[%# Previous/Play/Next visually centered in the bar instead of drifting right now that          %]
-		[%# something occupies the right-hand side.                                                     %]
-		<div style="width:40px; flex:none;"></div>
+		display:flex; align-items:center; justify-content:center; padding:0 8px;">
 		<div style="display:flex; align-items:center; justify-content:center; gap:40px;">
-		[%# SVG instead of Unicode glyphs, Henk's idea 2026-09-04. Sized with width/height, not      %]
-		[%# font-size, which sidesteps the whole Vuetify !important fight from a moment ago          %]
-		[%# entirely - an <svg> ignores the button's font-size altogether. fill="currentColor" keeps %]
-		[%# it following --text-color the same way the old glyphs did.                               %]
-		<button type="button" onclick="scPlayerCmd(['playlist','index','-1'])" class="sc-transport-btn" aria-label="Previous" title="Previous">
-			<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-		</button>
-		[%# Two icons, one hidden - Henk 2026-09-04. The button always showed the pause icon         %]
-		[%# regardless of actual state; scUpdatePlayState() above toggles which of these is         %]
-		[%# visible based on the player's real mode (play/pause/stop), polled the same way as       %]
-		[%# everything else on this page. Pause shown by default until the first poll lands, since  %]
-		[%# landing on Live View usually means something is already playing.                        %]
-		[%# Filled circle, Henk 2026-09-04 - matches Material's own player bar convention: the       %]
-		[%# play/pause button stands out as a solid circle, Previous/Next stay plain flat icons.    %]
-		[%# Circle fill is --text-color and the icon fill is --background-color (the two swapped),  %]
-		[%# so it stays a guaranteed-contrast "punched out" icon under any theme rather than a       %]
-		[%# hardcoded colour that might not suit a light theme.                                      %]
-		<button type="button" onclick="scPlayerCmd(['pause'])" class="sc-transport-btn sc-transport-btn-play" aria-label="Play / Pause" title="Play / Pause">
-			<svg id="scIconPlay" width="26" height="26" viewBox="0 0 24 24" fill="var(--background-color, #424242)" style="display:none"><path d="M8 5v14l11-7z"/></svg>
-			<svg id="scIconPause" width="26" height="26" viewBox="0 0 24 24" fill="var(--background-color, #424242)"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
-		</button>
-		<button type="button" onclick="scPlayerCmd(['playlist','index','+1'])" class="sc-transport-btn" aria-label="Next" title="Next">
-			<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-		</button>
+			<button type="button" onclick="scPlayerCmd(['playlist','index','-1'])" class="sc-transport-btn" aria-label="Previous" title="Previous">
+				<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+			</button>
+			<button type="button" onclick="scPlayerCmd(['pause'])" class="sc-transport-btn sc-transport-btn-play" aria-label="Play / Pause" title="Play / Pause">
+				<svg id="scIconPlay" width="26" height="26" viewBox="0 0 24 24" fill="var(--background-color, #424242)" style="display:none"><path d="M8 5v14l11-7z"/></svg>
+				<svg id="scIconPause" width="26" height="26" viewBox="0 0 24 24" fill="var(--background-color, #424242)"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+			</button>
+			<button type="button" onclick="scPlayerCmd(['playlist','index','+1'])" class="sc-transport-btn" aria-label="Next" title="Next">
+				<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+			</button>
 		</div>
-		[%# Henk, 2026-09-06 - queue button, ported from SC-EXTMIP: same .sc-transport-btn sizing/     %]
-		[%# styling as Previous/Next, opens sc-queue-panel below via scQueueToggle.                     %]
-		<button type="button" id="scQueueBtn" onclick="scQueueToggle()" class="sc-transport-btn" style="width:40px; flex:none; justify-content:flex-end;" aria-label="Show Queue" title="Show Queue">
-			<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
-		</button>
 	</div>
-	[%# Styling notes, Henk 2026-09-04. Grey background matches Material's own chrome instead of    %]
-	[%# an arbitrary colour: --background-color/--text-color/--list-item-border-color are           %]
-	[%# Material's OWN CSS variables, already copied onto this iframe's document root for every     %]
-	[%# SugarCube page (lms-material's iframe-dialog.js: copyVars() runs for any 'extras' page,      %]
-	[%# which this is) - so the bar follows whatever theme the user has picked. The fallback values  %]
-	[%# are what render in Classic or any non-Material skin, where those variables are never set.    %]
-	[%# Icons are SVG with an explicit width/height, not text glyphs sized by font-size - the        %]
-	[%# earlier text-glyph version fought Vuetify's own !important font-size rules on <button> and   %]
-	[%# needed !important right back to win; SVG sidesteps that fight completely, since its size      %]
-	[%# isn't driven by font-size at all. fill="currentColor" still follows the button's own          %]
-	[%# `color`, so theming is unaffected. Flat, no button chrome, matching Material's own bottom     %]
-	[%# bar rather than looking like a separate widget bolted onto the page.                          %]
+	[%# Grey, matching Material's own chrome instead of an arbitrary colour. --background-color/    %]
+	[%# --text-color/--list-item-border-color are Material's OWN CSS variables, already copied onto %]
+	[%# this iframe's document root for every SugarCube page (lms-material's iframe-dialog.js:      %]
+	[%# copyVars() runs for any 'extras' page, which this is) - so the bar follows whatever theme    %]
+	[%# the user has picked. The fallback values are what render in Classic or any non-Material      %]
+	[%# skin, where those variables are simply never set. SVG icons with explicit width/height,      %]
+	[%# not text glyphs sized by font-size, sidestep the Vuetify !important fight on <button>.       %]
 	<style>
+		[%# Henk's request 2026-09-13, custom touch-drag slider handling above (scLvDrag) - none, not    %]
+		[%# pan-y (an earlier attempt, see the comment up there for why it wasn't enough on its own):    %]
+		[%# that script now takes over BOTH axes by hand (drag and, for one of these six sliders, even   %]
+		[%# scrolling), so the browser should not try to claim either gesture natively at all.           %]
+		input[type="range"] { touch-action: none; accent-color: var(--sclv-accent-color, rgb(25,118,210)); }
+
+		[%# Mix Settings row layout, 05-10-2026 - ported from Random Flow's own live.html (.tstSettingRow %]
+		[%# there): one flex row per field (label, control, value) instead of label-then-control stacked  %]
+		[%# on two lines, with the value right-aligned instead of baked into the label line. Width:140px  %]
+		[%# on the label is wide enough for "Artist Spacing" (the longest one here) without wrapping, so  %]
+		[%# every row's control starts at the same x regardless of label length.                          %]
+		.sclv-setting-row { display:flex; align-items:center; gap:10px; margin:0.6em 0; }
+		.sclv-setting-row label { flex:none; width:140px; white-space:nowrap; }
+		.sclv-setting-row select, .sclv-setting-row input[type="range"] { flex:1; }
+		.sclv-setting-value { flex:none; min-width:32px; text-align:right; opacity:0.85; font-size:0.9em; }
+
+		[%# Info-icon/popover widget, matching player.html/quicksettings.html - see scToggleInfo above. %]
+		.sc-info-wrap { position:relative; display:inline-block; }
+		.sc-info-icon { cursor:pointer; opacity:0.7; padding-left:8px; }
+		.sc-info-popover {
+			display:none; position:absolute; z-index:1000; top:100%; left:0; margin-top:6px;
+			width:300px; max-width:80vw; background:#2b2b2b; color:#fff;
+			border-radius:8px; padding:16px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+			font-size:0.85em; line-height:1.4;
+		}
+		.sc-info-popover button {
+			background:none; border:1px solid #9c9; color:#9c9; border-radius:16px;
+			padding:6px 16px; cursor:pointer; float:right; margin-top:12px;
+		}
 		.sc-transport-btn {
 			background: transparent !important;
 			color: var(--text-color, #e0e0e0) !important;
@@ -351,10 +977,10 @@
 			opacity: 0.85 !important;
 		}
 		.sc-transport-btn:hover { opacity: 1 !important; }
-		[%# Solid circle just for Play/Pause, Henk 2026-09-04 - Material's own convention is a       %]
-		[%# filled circular button for play/pause while the flanking controls stay flat, so this    %]
-		[%# one button gets its own rule instead of changing .sc-transport-btn for all three.        %]
-		[%# 44px comfortably contains the 26x26 icon with even padding on every side.                %]
+		[%# Solid circle just for Play/Pause, matching Material's own convention: the play/pause    %]
+		[%# button stands out as a solid circle, Previous/Next stay plain flat icons. Circle fill    %]
+		[%# is --text-color and the icon fill is --background-color (the two swapped), so it stays a %]
+		[%# guaranteed-contrast "punched out" icon under any theme.                                  %]
 		.sc-transport-btn-play {
 			background: var(--text-color, #e0e0e0) !important;
 			border-radius: 50% !important;
@@ -362,20 +988,14 @@
 			height: 44px !important;
 			opacity: 1 !important;
 		}
-		[%# "New Mix" / "Replace Track" buttons under each cover, Henk 2026-09-05 - now icon-only,   %]
-		[%# same reasoning as the transport bar (Craig Drummond's own stated preference against text %]
-		[%# in icons/buttons - breaks in other languages). Almost identical to .sc-transport-btn, but %]
-		[%# that class is display:flex, which takes the button out of inline flow so the parent's     %]
-		[%# text-align:center has nothing to center - these buttons sat flush left under the cover    %]
-		[%# instead of centered. inline-flex keeps the icon centered *inside* the button (flex still  %]
-		[%# applies within it) while the button itself stays an inline-level box the parent CAN       %]
-		[%# center, and margin is zeroed since these are always alone in their own div (no neighbours %]
-		[%# to space away from, unlike the three transport buttons in a row).                          %]
-		[%# Henk, 2026-09-05 - fallback colour deliberately differs from the transport bar's own       %]
-		[%# #e0e0e0: those buttons sit on a grey bar in every skin so a light fallback always has      %]
-		[%# contrast, but these two sit directly on the page background, which is light in every       %]
-		[%# non-Material skin - #e0e0e0 there was almost invisible. #333 is dark enough to read on a   %]
-		[%# light page while --text-color still wins outright whenever Material supplies it.           %]
+		[%# "Start New Chain" button under the Currently Playing cover - icon-only, same reasoning   %]
+		[%# as the transport bar. .sc-transport-btn is display:flex, which takes the button out of   %]
+		[%# inline flow so the parent's text-align:center has nothing to center; inline-flex keeps   %]
+		[%# the icon centered *inside* the button while the button itself stays inline-level so the  %]
+		[%# parent CAN center it. Fallback colour deliberately differs from the transport bar's own  %]
+		[%# #e0e0e0: that bar sits on a grey bar in every skin, but this button sits directly on the %]
+		[%# page background, which is light in every non-Material skin - #e0e0e0 there is almost     %]
+		[%# invisible. #333 reads on a light page while --text-color still wins under Material.      %]
 		.sc-livebtn-icon {
 			background: transparent !important;
 			color: var(--text-color, #333) !important;
@@ -389,12 +1009,13 @@
 			opacity: 0.85 !important;
 		}
 		.sc-livebtn-icon:hover { opacity: 1 !important; }
-		[%# "Play Next" icon in the MusicIP Track Recommendations table, Henk 2026-09-05 - built as %]
-		[%# a raw <a> string in Breakout.pm's StatsPuller (that table isn't TT-rendered, so this      %]
-		[%# class lives here purely because this is the page it ends up embedded in). Same theming    %]
-		[%# convention as .sc-livebtn-icon - --text-color with a dark fallback for non-Material skins -%]
-		[%# but inline-block/no-underline instead of button reset properties, since the element is an %]
-		[%# <a>, not a <button>.                                                                       %]
+		[%# "Use as Next Track" icon in the MusicIP Track Recommendations table, Henk 2026-09-05 -  %]
+		[%# ported from the hoofdmap build's ".sc-mipbtn" (there used for its "Play Next" icon).      %]
+		[%# Built as a raw <a> string in Breakout.pm's StatsPuller (that table isn't TT-rendered, so %]
+		[%# this class lives here purely because this is the page it ends up embedded in). Same      %]
+		[%# theming convention as .sc-livebtn-icon - --text-color with a dark fallback for non-       %]
+		[%# Material skins - but inline-flex/no-underline instead of button reset properties, since  %]
+		[%# the element is an <a>, not a <button>.                                                    %]
 		.sc-mipbtn {
 			color: var(--text-color, #333) !important;
 			text-decoration: none !important;
@@ -405,59 +1026,168 @@
 		}
 		.sc-mipbtn:hover { opacity: 1 !important; }
 
-		[%# Henk, 2026-09-06 - same mobile-compaction pass already applied to SC-EXTMIP's own          %]
-		[%# liveview.html: on a phone, hide the three extra stat lines and the Spicefly stats rows     %]
-		[%# (they push New Mix/Replace Track further down and leave less room for the MusicIP Track    %]
-		[%# Recommendations list to scroll in), and shrink the fixed px gaps that were never tuned for  %]
-		[%# a phone screen specifically. Scoped to #sclvbody (sclv-top now lives inside it, so this      %]
-		[%# still reaches everything there too) rather than the page overall, since filler1/filler2      %]
-		[%# are shared class names also used by quicksettings.html and others.                          %]
+		[%# sclv-menu, REPLACED 2026-09-12 (Henk) - the 2026-09-11 accordion (see git history/edit    %]
+		[%# log for that version) folded Last MIP Response and History into two <details> sections,  %]
+		[%# each with its own max-height/overflow-y "sub-scrollbox". On a phone that fought a losing  %]
+		[%# battle for space against the sticky Current/Next Track block above it - Henk confirmed    %]
+		[%# with a screenshot that on mobile "er blijft niks geen ruimte over om te scrollen": the     %]
+		[%# open section's max-height was a percentage of the FULL viewport, but the sticky block      %]
+		[%# (which Henk explicitly wants to keep large - big cover art is deliberate, "vooral als je   %]
+		[%# de telefoon open zet tijdens een auto rit") and the fixed transport bar both also always   %]
+		[%# occupy real screen space at the same time, so almost nothing was left for the open         %]
+		[%# section's own tiny scrollbox once you actually measured it on a real phone.                %]
+		[%#                                                                                             %]
+		[%# Fix is architectural, not another max-height tweak: Last MIP Response/History (and, once   %]
+		[%# Quick Settings merges in, Chain/Batch - not yet built, still 4 planned menu entries) no     %]
+		[%# longer sit inline in the page at all. A small menu button (top-left of #sclv-top, under    %]
+		[%# Material's own toolbar - deliberately NOT top-right, which is reserved for symmetry with   %]
+		[%# the hoezen, and NOT literally at the very top of the screen, which is Material's own        %]
+		[%# dialog chrome/the phone's status bar and not something this plugin can draw into) opens a  %]
+		[%# small dropdown; picking an entry opens a FULL-HEIGHT panel (position:fixed, top:0 to       %]
+		[%# bottom:68px - just above the transport bar/progress bar, same 64+4px this page's other     %]
+		[%# fixed elements already reserve) instead of a box squeezed in next to the sticky block. The  %]
+		[%# sticky Current/Next block stays exactly as large as Henk wants; a panel simply covers it   %]
+		[%# while open, and the whole panel body scrolls in whatever height is actually left on THAT   %]
+		[%# device, rather than a fraction of the full viewport picked in advance.                      %]
+		.sclv-menu-btn-wrap { position: relative; padding: 2px 0 10px 0; }
+		.sclv-menu-dropdown {
+			display: none;
+			position: absolute;
+			top: 100%;
+			left: 0;
+			z-index: 900;
+			min-width: 200px;
+			background: var(--background-color, #fff);
+			color: var(--text-color, #333);
+			border: 1px solid var(--list-item-border-color, rgba(128,128,128,0.3));
+			border-radius: 8px;
+			box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+			overflow: hidden;
+		}
+		.sclv-menu-dropdown a {
+			display: block;
+			padding: 12px 14px;
+			font-weight: bold;
+			color: inherit;
+			text-decoration: none;
+		}
+		.sclv-menu-dropdown a:hover, .sclv-menu-dropdown a:active { background: rgba(128,128,128,0.15); }
+
+		[%# 68px = the 64px transport bar + the 4px progress strip sitting just above it (both fixed, %]
+		[%# see further down this file) - the panel stops exactly where those begin instead of         %]
+		[%# guessing a value, so Henk's "transportbalk moet zichtbaar blijven" holds regardless of      %]
+		[%# panel content.                                                                              %]
+		.sclv-panel {
+			display: none;
+			position: fixed;
+			left: 0; right: 0; top: 0; bottom: 68px;
+			z-index: 800;
+			background: var(--background-color, #fff);
+			color: var(--text-color, #333);
+			flex-direction: column;
+		}
+		.sclv-panel.open { display: flex; }
+		.sclv-panel-header {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 10px 12px;
+			flex: none;
+			font-weight: bold;
+			background: rgba(128,128,128,0.1);
+			border-bottom: 1px solid var(--list-item-border-color, rgba(128,128,128,0.3));
+		}
+		[%# Henk, 2026-09-11 (carried over from the accordion this replaces) - "deze schijf voor het  %]
+		[%# scrollen knippert om de paar seconden": a freshly-inserted scrollable box flashes the      %]
+		[%# browser/OS scrollbar affordance on every ajaxUpdate rebuild even though it is visually the %]
+		[%# same spot each time, so it was hidden outright. REVERSED 2026-09-12 (Henk) - "In het queue %]
+		[%# menu zit wel de zijbalk! Kan dat ook in de Response en History?" - the Queue panel (this   %]
+		[%# same page, #sc-queue-panel below) never hid its own scrollbar and rebuilds its content on   %]
+		[%# the same 2-second cadence, so plain overflow-y:auto here now matches it. If the flicker      %]
+		[%# this was originally hiding turns out to bother Henk here too, the fix is scrollbar-width:    %]
+		[%# none/::-webkit-scrollbar{width:0} again, not a redesign - this is a one-line revert either   %]
+		[%# way.                                                                                         %]
+		.sclv-panel-body {
+			flex: 1;
+			overflow-y: auto;
+			padding: 10px 4px 6px;
+		}
+
+		[%# Henk, 2026-09-06 - "compacte weergave zonder ratings en played status op mobiel". The     %]
+		[%# flex Currently Playing/Coming Up Next block is taller than the old table was once Rating/  %]
+		[%# Playcount/Last Played are showing (showstats=ON) - three extra full-width text lines per   %]
+		[%# side - which on a phone pushes the New Chain/Replace Track buttons further down and leaves %]
+		[%# less of the screen for the MusicIP Track Recommendations list to actually scroll in. Below %]
+		[%# this width those three lines simply disappear; label/title/artist/album/genre (the same    %]
+		[%# fields SC-EXTMIP's own SC Controls already shows unconditionally) still stay. %]
 		@media (max-width: 480px) {
 			.sclv-statline { display: none !important; }
-			.sclv-topstats { display: none !important; }
-			#sclvbody .filler1 { height: 4px !important; }
-			#sclvbody .filler2 { height: 6px !important; }
-			#sclvbody hr { margin: 4px 0 !important; }
+
+			[%# Henk, 2026-09-06 - "de marges onder en boven en bij de MIP Response lijst wat aan de   %]
+			[%# ruime kant". filler1/filler2 (sugarcube.css) and every <hr> on this page use fixed      %]
+			[%# px values that were never tuned for a phone screen specifically - shrunk here, and      %]
+			[%# scoped to #sclv-top/#sclvbody only so nothing outside Live View is affected (filler1/2  %]
+			[%# are shared class names, also used by quicksettings.html and others). sclv-curnext-row/  %]
+			[%# sclv-track-row are new classes on the flex containers added alongside the flex rework   %]
+			[%# above, purely so their existing inline bottom-padding can be turned down here too.      %]
+			#sclv-top .filler1, #sclvbody .filler1 { height: 4px !important; }
+			#sclv-top .filler2, #sclvbody .filler2 { height: 6px !important; }
+			#sclv-top hr, #sclvbody hr { margin: 4px 0 !important; }
 			.sclv-curnext-row { padding-bottom: 8px !important; }
 			.sclv-track-row { padding-bottom: 6px !important; }
 
-			[%# Best-effort only - "Last MIP Response" is drawn by Lyrion's own shared settingGroup    %]
-			[%# WRAPPER (core skin code, not part of this plugin), so its actual markup/class names     %]
-			[%# cannot be inspected from here. Targets the generic browser default fieldset/legend      %]
-			[%# spacing that macro most likely renders as, scoped to just this one call via the         %]
-			[%# wrapping div below - a no-op if the guess is wrong, rather than touching anything        %]
-			[%# global. Tell me if this one didn't help; then I need the actual rendered HTML to        %]
-			[%# target it precisely instead of guessing again.                                          %]
-			.sclv-mipheader fieldset { margin: 0 !important; padding: 2px 6px !important; }
-			.sclv-mipheader legend { margin: 0 !important; padding: 0 !important; font-size: 0.9em !important; }
+			[%# The old .sclv-mipheader fieldset/legend best-effort rule (targeting the settingGroup   %]
+			[%# WRAPPER's unseen markup) is gone along with settingGroup itself - see sclv-menu above.  %]
+			[%# The old .sclv-menu-body max-height:45vh mobile override that used to live here is gone  %]
+			[%# too - that was exactly the "steals room from the list" rule the 2026-09-12 menu+panel   %]
+			[%# redesign replaced; .sclv-panel is already full height (minus the transport bar) on      %]
+			[%# every screen size, so no mobile-specific override is needed here anymore.               %]
 		}
 	</style>
 
-	[%# Queue panel, Henk 2026-09-06, ported from SC-EXTMIP alongside the transport-bar button       %]
-	[%# above. Lives out here in the persistent shell, same reasoning as the transport bar itself -   %]
-	[%# it must survive every scLvRefresh swap of #sclvbody untouched, or it would close itself out    %]
-	[%# from under whoever had it open every time the refresh interval ticks. Anchored bottom-right,   %]
-	[%# right above the transport bar (64px tall), so it opens upward from the button that triggers   %]
-	[%# it. Starts closed (display:none); scQueueOpen (in the outer script above) tracks that same     %]
-	[%# on/off state across refreshes since this markup itself is never rebuilt.                       %]
-	<div id="sc-queue-panel" style="display:none; position:fixed; bottom:72px; right:8px; z-index:900;
+	[%# Queue panel, Henk's request 2026-09-05, button moved into the transport bar 2026-09-05, then   %]
+	[%# moved AGAIN 2026-09-12 to sclv-top's top-right (next to the menu button) - "nu ik de menu knop %]
+	[%# zo linksboven zie zou rechtsboven het Queue menu beter staan". The panel itself still stays    %]
+	[%# out here in the persistent shell regardless of where its button lives, same reasoning as       %]
+	[%# always: it must survive every ajaxUpdate refresh untouched, or it would close itself out from  %]
+	[%# under whoever had it open every time the 2-second interval ticks.                              %]
+	[%#                                                                                                 %]
+	[%# top/right are no longer set here - the button now sits inside a position:sticky element        %]
+	[%# instead of a fixed corner of the transport bar, so there is no single constant that always      %]
+	[%# lines up under it; scQueueToggle sets top/right/max-height from the button's own current       %]
+	[%# on-screen position every time it opens (see that function's comment). The values below are     %]
+	[%# only an inert fallback shape used before that JS ever runs (display:none anyway until toggled  %]
+	[%# open, so this fallback is never actually seen).                                                %]
+	[%# Panel starts closed (display:none) and JS toggles it; scQueueOpen (in the outer script)      %]
+	[%# tracks that same on/off state across refreshes, since this markup itself is never rebuilt.   %]
+	[%# Widened from 380 to 460px, Henk 2026-09-05 - "kan de lijst wel breder gemaakt worden en de   %]
+	[%# hoesjes groter" so three stacked lines (title/artist/album) plus the duration/rating column  %]
+	[%# and the three action buttons all have room, matching the real queue's proportions more       %]
+	[%# closely instead of everything competing for space in a narrow column.                         %]
+	<div id="sc-queue-panel" style="display:none; position:fixed; top:60px; right:8px; z-index:900;
 		max-height:60vh; width:min(94vw, 460px); overflow-y:auto; background:var(--background-color, #fff);
 		color:var(--text-color, #333); border:1px solid var(--list-item-border-color, rgba(128,128,128,0.35));
 		border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.35);">
+		[%# Close button removed, Henk 2026-09-05 - "kan het kruis weg en zo gemaakt worden dat als   %]
+		[%# je ergens buiten die lijst klikt hij sluit". The document click-outside listener above    %]
+		[%# (in scQueueToggle's section of the outer script) closes the panel now instead.            %]
 		<div style="padding:8px 10px; border-bottom:1px solid var(--list-item-border-color, rgba(128,128,128,0.25)); position:sticky; top:0; background:inherit;">
 			<strong>Queue</strong>
 		</div>
 		<div id="sc-queue-list"><div style="padding:12px; opacity:0.7;">Loading...</div></div>
 	</div>
 
-<div id="sclvbody" style="padding-bottom:76px;">
+<div id="sclvbody" style="padding-bottom:76px; padding-left:1.5em; padding-right:1.5em;">
 [% END %]
-	[%# sclv-top, Henk 2026-09-06 - "de MIP Recommendations lijst apart scrollbaar maken", same      %]
-	[%# position:sticky mechanism already built for SC-EXTMIP's own liveview.html 2026-09-05: pins   %]
-	[%# Currently Playing/Coming Up Next and the "Last MIP Response" heading to the top of the page's %]
-	[%# own scroll once the MusicIP Track Recommendations list below would otherwise scroll them out  %]
-	[%# of view, rather than the previous single-piece scroll pushing them off entirely. background  %]
-	[%# is needed so recommendation rows scrolling underneath do not show through while pinned.       %]
+	[%# sclv-top, Henk 2026-09-05 - "make what's under Last MIP Response scrollable without the    %]
+	[%# top part disappearing". The MusicIP Track Recommendations list below can run to dozens of   %]
+	[%# rows, and this whole page previously scrolled as one piece - so scrolling down to see more   %]
+	[%# of that list pushed Last MIP Response, Current/Next Track and their New Chain/Replace Track  %]
+	[%# buttons off the top of the screen. position:sticky pins this div to the top of the page's    %]
+	[%# own scroll (the same scroll the fixed transport bar already assumes exists) once it would    %]
+	[%# otherwise scroll out of view - no fixed height or overflow container needed, and nothing     %]
+	[%# below has to change to make room, unlike position:fixed. background is needed so recommend-  %]
+	[%# ation rows scrolling underneath do not show through while this is pinned.                    %]
 	[%# Henk, 2026-09-06 - "als je scrolt loopt de tekst door elkaar", reproducible in both Firefox   %]
 	[%# and Chrome once actually isolated (an earlier JS-reflow attempt aimed at Firefox specifically %]
 	[%# was wrong and made it visibly worse everywhere - reverted). Real cause: position:sticky does   %]
@@ -470,33 +1200,137 @@
 	[%# context (the standard, purpose-built fix for exactly this "child's margin collapsing through   %]
 	[%# a parent" case), containing that margin instead of letting it leak out - a static CSS property %]
 	[%# with no runtime toggling, so unlike the reverted attempt it cannot itself cause any flicker.    %]
-	<div id="sclv-top" style="position:sticky; top:0; z-index:500; display:flow-root; background:var(--background-color, #fff);">
+	[%# Henk, 2026-09-08 - "de marge onder de tekst verdwijnt... ook op mijn tablet". Not a browser  %]
+[%# quirk - filler2's 12px gap (sugarcube.css) sits in normal flow AFTER this sticky element, so  %]
+[%# it scrolls out of view the moment you scroll past it, leaving the table's first row flush     %]
+[%# under the pinned header with no visible gap at all. Fixed here with padding-bottom on this    %]
+[%# sticky element itself instead - that space stays PINNED with the header as it scrolls, unlike %]
+[%# a sibling's own margin/height, which is what both earlier "sticky History heading" attempts   %]
+[%# got wrong (adding new content INSIDE here broke on the settingGroup macro's own layout both   %]
+[%# times) - this only adds a padding value to the sticky container that was already there.       %]
+<div id="sclv-top" style="position:sticky; top:0; z-index:500; display:flow-root; padding-bottom:12px; padding-left:1.5em; padding-right:1.5em; background:var(--background-color, #fff);">
 	[%# Henk, 2026-08-26: dropped the "SC Live View" row - Material's own dialog toolbar already   %]
 	[%# reads "SugarCube Live View" for this page, so the two just repeated the same title.        %]
+	[%# sclv-menu button, added 2026-09-12 (Henk) - top-left of OUR OWN content, directly under      %]
+	[%# Material's own toolbar (which already reads "SugarCube Live View" for this page - not        %]
+	[%# overlapping that row, and not the literal top of the screen, which is Material's chrome, not  %]
+	[%# this template's to draw into). Opens sclvMenuDropdown; each link opens one .sclv-panel below  %]
+	[%# via scLvPanelOpen (see sclv-menu CSS/JS comments). Chain/Batch entries are not here yet -     %]
+	[%# their content still only lives in quicksettings.html and the button placement for New Chain/  %]
+	[%# Replace Track/batch icons is still an open question - just Last MIP Response/History for now. %]
+	[%#                                                                                                %]
+	[%# Queue button moved up here 2026-09-12 (Henk) - "nu ik de menu knop zo linksboven zie zou      %]
+	[%# rechtsboven het Queue menu beter staan", mirroring the new menu button on the other side of    %]
+	[%# the same row. It used to live in the fixed transport bar (see that bar's own comment further  %]
+	[%# down) - moving it here is safe even though this whole div is rebuilt every ajaxUpdate tick,    %]
+	[%# because scQueueToggle/the click-outside listener/scQueueRefresh (all in the persistent OUTER  %]
+	[%# script) already re-look-up #scQueueBtn/#sc-queue-panel by id on every call rather than caching %]
+	[%# a reference - nothing about them assumed the button's own DOM node would survive a refresh.    %]
+	[%# The PANEL itself stays out in the persistent shell (still must survive every ajaxUpdate swap,  %]
+	[%# same reasoning as before - see the panel's own comment) - only the button moved. Its onclick   %]
+	[%# now also positions the panel (see scQueueToggle) since the panel can no longer sit in a fixed  %]
+	[%# spot relative to the transport bar's own corner - it opens downward from wherever this button  %]
+	[%# actually is on screen right now, sticky or not.                                                %]
+	[%# SC Status - Chain (automatic queuing) Enabled/Disabled, Henk's request 2026-09-12, first    %]
+	[%# piece of the Live View/Quick Settings merge (see the pending-work note further up about what  %]
+	[%# else quicksettings.html still has that Live View does not). Ported from that page's own SC    %]
+	[%# Status block - same sc_on/lamp/label - but AJAX instead of a page navigation: the <select>     %]
+	[%# below calls scLvSetStatus (defined in the persistent outer script) instead of submitting a    %]
+	[%# form, since this whole div is rebuilt on every ajaxUpdate tick and Live View must never        %]
+	[%# navigate. sc_on itself comes from Plugin.pm's handleWebList (see 'sc_on' there) - read fresh   %]
+	[%# on every render, so a change made from EITHER this page or Quick Settings shows up here        %]
+	[%# within one refresh (2s), no extra plumbing needed between the two pages.                       %]
+	[%#                                                                                                 %]
+	[%# MOVED 2026-09-12 (Henk) - "het staat toch niet tussen de beide iconen!": the first pass put   %]
+	[%# this on its OWN row below the icon row, spanning the full width. Henk's original ask ("boven  %]
+	[%# tussen de beide menu iconen") meant literally ON the icon row, in the gap between the menu     %]
+	[%# button and the Queue button - so it now lives INSIDE that same flex row, as a flex:1 middle    %]
+	[%# item between the two .sclv-menu-btn-wrap divs, centered, with the label ellipsis-truncating    %]
+	[%# (min-width:0 + white-space:nowrap + text-overflow:ellipsis, same pattern the Queue panel's     %]
+	[%# own track titles already use) if the two 26px icon buttons don't leave enough room for it.     %]
+	[%#                                                                                                 %]
+	[%# The DSTM clash line stays its own full-width row below the icon row - it is only text, "next   %]
+	[%# to" the icons made no sense for it the way it did for the toggle itself. Same UNCONDITIONAL    %]
+	[%# text quicksettings.html/player.html show (ATTENTION POINT, Henk 2026-08-30) - it does not      %]
+	[%# check DSTM's actual state for this player. Henk noted 2026-09-12 that another version of this  %]
+	[%# plugin (MusicIPFlow) resolves the real clash instead, via a mutual sugarcube_status/DSTM        %]
+	[%# provider pref watcher - not built here yet, pending his go-ahead; this is only the toggle       %]
+	[%# plus the existing static warning, ported as-is.                                                 %]
+	[% IF sc_on %][% sc_lamp = '#3fb950' %][% ELSE %][% sc_lamp = '#f04747' %][% END %]
+	[%# Henk, 2026-09-12 - "verdomme, na een cache leging ziet het er zo uit!": with a fresh (non-  %]
+	[%# stale) render in Material's own app wrapper, the flex:1 middle column did not actually claim  %]
+	[%# the remaining row width - both icon buttons ended up bunched at the left with the toggle       %]
+	[%# trailing after them instead of centered between. Switched the row from flexbox to CSS GRID    %]
+	[%# (grid-template-columns: auto 1fr auto) instead of chasing the flex:1 failure further - grid    %]
+	[%# track sizing is a wholly separate mechanism from flex-grow, so whatever in Material's own      %]
+	[%# Vuetify chrome was resetting flex behaviour here (this page fighting Material's surrounding    %]
+	[%# app shell is a recurring theme - see the iframe-dialog notes elsewhere in this file) has        %]
+	[%# nothing to touch. Each icon button's own column is auto-sized to its content; the middle       %]
+	[%# column is 1fr and centers its own contents via its still-present inner flex/justify-content.   %]
+	<div style="display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:6px;">
+		<div class="sclv-menu-btn-wrap">
+			<button type="button" class="sc-livebtn-icon" id="sclvMenuBtn" onclick="scLvMenuToggle()" aria-label="Menu" title="Menu" style="width:26px;height:26px;">
+				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+			</button>
+			[%# Henk, 2026-09-12 - menu entry renamed to a plain, static "MIP Response" (no date/time): %]
+			[%# mode itself is "Last MIP Response: <date>" (see Plugin.pm), right for a heading over    %]
+			[%# the candidate list but too long/redundant for a nav item that is never itself dated -   %]
+			[%# the date now shows once, in the panel heading below, after you actually open it.        %]
+			<div id="sclvMenuDropdown" class="sclv-menu-dropdown">
+				<a href="#" onclick="scLvPanelOpen('mip');return false;">MIP Response</a>
+				<a href="#" onclick="scLvPanelOpen('history');return false;">History</a>
+			</div>
+		</div>
+
+		<div style="min-width:0; display:flex; align-items:center; justify-content:center; gap:6px;">
+			<span style="width:10px; height:10px; border-radius:50%; display:inline-block; flex:none; background:[% sc_lamp %]; box-shadow:0 0 6px [% sc_lamp %];"></span>
+			<span style="min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;[% IF !sc_on %] color:#f04747; font-weight:bold;[% END %]">[% "PLUGIN_SC_WEB_QS_STATUS" | string %]</span>
+			<select id="sclvChainStatus" onchange="scLvSetStatus(this.value)" style="flex:none;[% IF !sc_on %] color:#f04747; font-weight:bold;[% END %]">
+				<option [% IF !sc_on %]selected [% END %]value="0">[% 'Disabled' | getstring %]</option>
+				<option [% IF sc_on %]selected [% END %]value="1">[% 'Enabled' | getstring %]</option>
+			</select>
+			[%# Henk, 2026-09-13 (third try, same day) - first put behind its own always-visible line     %]
+			[%# below this row (matched player.html's old static text), then given a label so a bare icon %]
+			[%# wasn't so easy to miss - Henk then asked to fold it back into this row after all instead: %]
+			[%# "elke regel op een mobiel is er een te veel" (every extra line on mobile is one too many).%]
+			[%# Bare icon here, no label text, to keep its footprint as small as possible in an already    %]
+			[%# tight row (two 26px icon buttons plus this lamp/label/select group sharing the width -     %]
+			[%# the whole reason this row is CSS grid, not flex, since 2026-09-12). scToggleInfo's own      %]
+			[%# position-clamp keeps the popover on-screen regardless of where this icon ends up sitting.  %]
+			<span class="sc-info-wrap">
+				<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+				<div class="sc-info-popover">
+					[% "PLUGIN_SC_WEB_SUGARCUBESTATUSDESC" | string %]
+					<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+					<div style="clear:both;"></div>
+				</div>
+			</span>
+		</div>
+
+		<div class="sclv-menu-btn-wrap">
+			<button type="button" class="sc-livebtn-icon" id="scQueueBtn" onclick="scQueueToggle()" aria-label="Show Queue" title="Show Queue" style="width:26px;height:26px;">
+				<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg>
+			</button>
+		</div>
+	</div>
+
 	<table class='topside'>
-	[%# Henk, 2026-09-06 - "ziet er rommelig uit" on a phone next to SC-EXTMIP's own (plainer) topside %]
-	[%# table, which never had this thead/these two rows. Kept on desktop (not asked to remove them   %]
-	[%# there), hidden below 480px via .sclv-topstats in the media query above.                        %]
-	<thead class="sclv-topstats">
-	<tr><th><strong>Spicefly SugarCube Statistics</strong></th></tr>
-	</thead>
 	<tbody>
-	<tr class="sclv-topstats"><td>Queued [% sugarcube_trackcount %] tracks, including [% sugarcube_randomcount %] random tracks.  [% sugarcube_randomcountpercentage %] of the total.</td></tr>
-	<tr class="sclv-topstats"><td>Random Track Last Chosen; [% sugarcube_randomtrack %] - [% sugarcube_stats_random_time %]</td></tr>
 	<tr><td>[% master %]</td></tr>
 	<tr><td>[% mixstatus %]</td></tr>
 	</tbody>
 	</table>
+
 	[% IF track != '' %]
 	<hr>
-	[%# Henk, 2026-09-06 - "SCLV net zo maken als SCQS van SC-EXTMIP", same conversion already done  %]
-	[%# in SC-EXTMIP's own liveview.html: the <table class='midside'> (image cells rowspanned over    %]
-	[%# one row per field) becomes a flex row/column pair - image beside a stacked text column         %]
-	[%# (label, bold title, then this build's own existing field order: album, artist, genre), rather  %]
-	[%# than a table row per field. Content, field order, buttons (just Start New Mix/Replace Track -   %]
-	[%# this build has no batch-mode buttons to carry over) and guards (sc_can_act, showstats) are      %]
-	[%# unchanged, only the container markup. The showstats rowspan=8-vs-5 split is gone too - nothing  %]
-	[%# needs a rowspan anymore, so only the three extra stat lines themselves stay conditional.        %]
+	[%# Henk, 2026-09-06 - "SCLV in beide versies net zo maken als SCQS van SC-EXTMIP": swapped the   %]
+	[%# <table class='midside'> (image cells rowspanned over one row per field) for the same flex     %]
+	[%# row/column pattern SC-EXTMIP's own quicksettings.html already uses for its Currently Playing/ %]
+	[%# Coming Up Next block (sc-qs-cur-col/sc-qs-next-col) - image beside a stacked text column       %]
+	[%# (label, bold title, artist, album, genre), rather than a table row per field. Content and     %]
+	[%# guards (sc_can_act/sc_in_batch, showstats) are unchanged, just the container markup; the       %]
+	[%# showstats rowspan=8-vs-5 split is gone too - nothing here needs a rowspan anymore, so only    %]
+	[%# the three extra stat lines themselves stay conditional. %]
 	<div class="sclv-curnext-row" style="display:flex; gap:24px; flex-wrap:wrap; padding:0 0 20px 0;">
 
 		<div style="flex:1; min-width:220px;">
@@ -505,83 +1339,301 @@
 			[%# each resized cover under its exact size AND mode letter, so asking for anything else    %]
 			[%# made a picture used by this page alone. The old per-user size slider went with this.    %]
 			<div class="sclv-track-row" style="display:flex; align-items:flex-start; gap:14px; padding:0 0 12px 0;">
-				<img style="width:100px !important; height:100px !important; border-radius:10px !important; object-fit:cover !important; display:block !important; flex:none;" src="[% webroot %]music/[% currentalbumart %]/cover_300x300_f.jpg" alt="">
+				<img id="scCurrentCover" style="width:100px !important; height:100px !important; border-radius:10px !important; object-fit:cover !important; display:block !important; flex:none;" src="[% webroot %]music/[% currentalbumart %]/cover_300x300_f.jpg" alt="">
 				<div>
-					<div style="opacity:0.6; font-size:0.8em;">Currently Playing</div>
+					[%# The two panel headings are string keys, not literal text, since Edit 53. They   %]
+					[%# were the last literals in this template, and the SC Controls page draws the      %]
+					[%# SAME two headings from these same keys - so the wording lives in one place.      %]
+					<div style="opacity:0.6; font-size:0.8em;">[% "PLUGIN_SUGARCUBE_PLAYING" | string %]</div>
 					<div style="font-weight:bold;">[% currenttrack %]</div>
-					<div style="opacity:0.7; font-size:0.85em;">[% currentalbum %]</div>
 					<div style="opacity:0.85; font-size:0.9em;">[% currentartist %]</div>
-					<div style="opacity:0.6; font-size:0.8em;">[% currentgenre %]</div>
+					<div style="opacity:0.7; font-size:0.85em;">[% currentalbum %]</div>
+					<div style="opacity:0.6; font-size:0.8em;">Genre: [% currentgenre %]</div>
 					[% IF showstats == 'ON' %]
-					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Playcount: [% currentpc %]</div>
 					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Rating: [% currentrat %]</div>
-					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;" title="Last Played">[% currentlp %]</div>
+					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Playcount: [% currentpc %]</div>
+					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Last Played: [% currentlp %]</div>
 					[% END %]
 				</div>
 			</div>
-			[%# "New Mix" icon button, Henk 2026-09-04/05 - same scPlayerCmd JSON-RPC pattern as the    %]
-			[%# transport bar, see scStartMix in Plugin.pm - so Live View never navigates away and      %]
-			[%# back for it. Guarded by sc_can_act so the button disappears entirely during a loaded     %]
-			[%# album/playlist, rather than staying visible and refusing on click.                      %]
-			[% IF sc_can_act %]<div style="margin-top:8px; text-align:center; width:100px;"><button type="button" onclick="scPlayerCmd(['sugarcube','startmix'])" class="sc-livebtn-icon" aria-label="Start New Mix" title="Start New Mix"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button></div>[% END %]
+			[%# "Start New Chain"/"Start New Batch" icon buttons, Henk 2026-09-05, side by side as of    %]
+			[%# 2026-09-12. Same scPlayerCmd JSON-RPC pattern as the transport bar - see scStartChain/   %]
+			[%# scStartBatch in Plugin.pm - so Live View never navigates away and back for either.        %]
+			[%# Henk 2026-09-12 - "als ik een batch start verdwijnen er twee iconen... kan ik geen Chain  %]
+			[%# meer starten": "Start New Chain" used to stay guarded by sc_can_act too, same as         %]
+			[%# "Replace Track" below, disappearing entirely once a batch was running. UNGATED now,       %]
+			[%# because AutoStartMix (see Plugin.pm) is safe from either state - it unconditionally       %]
+			[%# clears the WHOLE queue and starts a fresh single-seed Chain, exactly like "Start New      %]
+			[%# Batch"'s own PlaySCBatch(...,'play') already does, and carries its own separate           %]
+			[%# sugarcube_status guard/on-player refusal message. "Replace Track" is NOT the same shape - %]
+			[%# see the comment above it further down for why that one stays gated for now.               %]
+			[%# "Start New Batch" (a.k.a. "Play Mood Batch") used to be guarded by sc_in_batch instead -   %]
+			[%# shown ONLY while a batch was already running - which meant there was no way to START a    %]
+			[%# batch from ordinary Chain mode at all, the gap Henk hit. Now UNGATED, always rendered, so %]
+			[%# a batch can be started from Chain mode too; a fired batch's own seed is never stored       %]
+			[%# anywhere once queued, so this cannot literally restart "the same batch" - a shuffle icon   %]
+			[%# (rather than New Chain's circular-arrow) signals that distinction at a glance. This used   %]
+			[%# to also be duplicated, ungated, inside the Mood Settings collapsible below - removed from  %]
+			[%# there since it is now always visible here.                                                %]
+			[%# Henk 2026-09-12 - "dat kost op een mobiel teveel ruimte": these two used to be stacked     %]
+			[%# one under the other (each its own text-align:center; width:100px block, which stacks      %]
+			[%# vertically as separate block-level divs) once both were unconditional at the same time -  %]
+			[%# fine when only one of the two could ever show, but wasteful of vertical space on a phone  %]
+			[%# once both show together in Chain mode. Now a single flex row, gap 16px, so up to two      %]
+			[%# 40px icons sit side by side within roughly the same ~100px width the album art above       %]
+			[%# them spans; still centered when only one of the two renders (never both absent now, since %]
+			[%# neither is gated any more).                                                                %]
+			<div style="margin-top:8px; display:flex; align-items:center; justify-content:center; gap:16px; width:100px;">
+			<button type="button" onclick="scPlayerCmd(['sugarcube','startchain'])" class="sc-livebtn-icon" aria-label="Start New Chain" title="Start New Chain"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+			<button type="button" onclick="scPlayerCmd(['sugarcube','startbatch'])" class="sc-livebtn-icon" aria-label="Start New Batch" title="Start New Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+			</div>
 		</div>
 
 		<div style="flex:1; min-width:220px;">
 			<div class="sclv-track-row" style="display:flex; align-items:flex-start; gap:14px; padding:0 0 12px 0;">
 				<img style="width:100px !important; height:100px !important; border-radius:10px !important; object-fit:cover !important; display:block !important; flex:none;" src="[% webroot %]music/[% comingupnextalbumart %]/cover_300x300_f.jpg" alt="">
 				<div>
-					<div style="opacity:0.6; font-size:0.8em;">Coming Up Next</div>
+					<div style="opacity:0.6; font-size:0.8em;">[% "PLUGIN_SUGARCUBE_UPNEXT" | string %]</div>
 					<div style="font-weight:bold;">[% comingupnexttrack %]</div>
-					<div style="opacity:0.7; font-size:0.85em;">[% comingupnextalbum %]</div>
 					<div style="opacity:0.85; font-size:0.9em;">[% comingupnextartist %]</div>
-					<div style="opacity:0.6; font-size:0.8em;">[% comingupnextgenre %]</div>
+					<div style="opacity:0.7; font-size:0.85em;">[% comingupnextalbum %]</div>
+					<div style="opacity:0.6; font-size:0.8em;">Genre: [% comingupnextgenre %]</div>
 					[% IF showstats == 'ON' %]
-					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Playcount: [% comingupnextpc %]</div>
 					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Rating: [% comingupnextrat %]</div>
-					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;" title="Last Played">[% comingupnextlp %]</div>
+					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Playcount: [% comingupnextpc %]</div>
+					<div class="sclv-statline" style="opacity:0.6; font-size:0.8em;">Last Played: [% comingupnextlp %]</div>
 					[% END %]
 				</div>
 			</div>
-			[%# "Replace Track" icon button, Henk 2026-09-04/05 - same scPlayerCmd JSON-RPC pattern as  %]
-			[%# "New Mix" above, see scReplaceNext in Plugin.pm. Guarded by the same sc_can_act.         %]
-			[% IF sc_can_act %]<div style="margin-top:8px; text-align:center; width:100px;"><button type="button" onclick="scPlayerCmd(['sugarcube','replacenext'])" class="sc-livebtn-icon" aria-label="Replace Track" title="Replace Track"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></button></div>[% END %]
+			[%# "Replace Track"/"Add Mood Batch" icon buttons, Henk 2026-09-05, side by side as of        %]
+			[%# 2026-09-12 - same layout change as "Start New Chain"/"Start New Batch" above, see that    %]
+			[%# comment for the full history. "Replace Track" DELIBERATELY STAYS guarded by sc_can_act,   %]
+			[%# unlike "Start New Chain" above (2026-09-12, Henk asked for both to be freed at once, this %]
+			[%# one is held back pending a real fix rather than guessed at) - scReplaceNext/                %]
+			[%# SugarCubeReplaceNext deletes just the one track queued next, then calls kickoff() to      %]
+			[%# refill it with a fresh MIP pick, but kickoff() only ever queues anything when             %]
+			[%# CheckPosition==1 (exactly one track LEFT, i.e. you are down to the last track - see       %]
+			[%# kickoff's own comment). During a batch there are normally several tracks still queued,    %]
+			[%# so deleting one would leave CheckPosition well above 1 and kickoff would queue nothing -   %]
+			[%# this button would silently DELETE the next batch track with no replacement, not actually  %]
+			[%# replace it. "Start New Chain"/"Start New Batch" are both safe unconditionally because      %]
+			[%# they always clear/rebuild the ENTIRE queue in one shot (AutoStartMix/PlaySCBatch 'play'); %]
+			[%# "Add Mood Batch" is safe because its own 'add' mode only ever touches the single track a   %]
+			[%# CheckPosition==2 chain queued (never more) before appending, per PlaySCBatch's own         %]
+			[%# comment. "Replace Track" has no such safeguard of its own - the sc_can_act gate in the      %]
+			[%# template IS the only thing stopping it from silently misbehaving mid-batch, so it is not   %]
+			[%# removed here without a Plugin.pm-side fix (e.g. Replace Track building and inserting its    %]
+			[%# own MIP pick directly, instead of relying on kickoff's last-track-only logic).             %]
+			[%# "Add Mood Batch" is UNGATED (see scAddBatch in Plugin.pm, which         %]
+			[%# appends the batch rather than clearing the queue first) so a batch can be queued as        %]
+			[%# next-in-line from ordinary Chain mode too - it used to also live, duplicated and ungated,  %]
+			[%# inside the Mood Settings collapsible below, removed from there since it is now always      %]
+			[%# visible here. Single flex row (gap 16px) instead of two stacked width:100px blocks, so     %]
+			[%# both icons fit side by side in roughly the album art's own ~100px width rather than        %]
+			[%# eating extra vertical space on a phone.                                                   %]
+			<div style="margin-top:8px; display:flex; align-items:center; justify-content:center; gap:16px; width:100px;">
+			[% IF sc_can_act %]<button type="button" onclick="scPlayerCmd(['sugarcube','replacenext'])" class="sc-livebtn-icon" aria-label="Replace Track" title="Replace Track"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></button>[% END %]
+			<button type="button" onclick="scPlayerCmd(['sugarcube','addbatch'])" class="sc-livebtn-icon" aria-label="Add Mood Batch" title="Add Mood Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z"/></svg></button>
+			</div>
 		</div>
 
 	</div>
 	<hr>
+	[%# Henk, 2026-09-11 - "Last MIP Response" moved back OUT of sclv-top, now reached through the    %]
+	[%# sclv-menu button/dropdown near the top of sclv-top instead of a lone settingGroup-WRAPPER      %]
+	[%# heading. 2026-09-12: that menu now opens a full-height .sclv-panel overlay rather than an      %]
+	[%# inline accordion section - it no longer needs to be pinned here at all, since it is not part   %]
+	[%# of the normal scrolling flow anymore (see the sclv-menu CSS comment). sclv-top stays sticky    %]
+	[%# for the track info/buttons above; the panels sit above everything else, fixed to the viewport. %]
+	[% ELSE %]
+	<hr>
+	[%# Henk, 05-10-2026 - an empty queue used to hide this whole section, Start New Chain/Start New  %]
+	[%# Batch included, leaving no way to begin anything from Live View once nothing was queued at all %]
+	[%# (Random Flow's own live.html keeps its equivalent buttons visible here). Same scPlayerCmd calls, %]
+	[%# same icons as the normal row above - both are already unconditionally safe (AutoStartMix/      %]
+	[%# PlaySCBatch 'play'), so nothing new has to be guarded here.                                      %]
+	<div style="display:flex; align-items:center; justify-content:center; gap:16px; padding:20px 0;">
+		<div style="opacity:0.7;">[% "PLUGIN_SC_WEB_QS_NOTHINGPLAYING" | string %]</div>
+		<button type="button" onclick="scPlayerCmd(['sugarcube','startchain'])" class="sc-livebtn-icon" aria-label="Start New Chain" title="Start New Chain"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+		<button type="button" onclick="scPlayerCmd(['sugarcube','startbatch'])" class="sc-livebtn-icon" aria-label="Start New Batch" title="Start New Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+	</div>
+	<hr>
+	[% END %]
+	</div>
 
-	[% IF mixstatus == '' %]
-	<div class="filler1"></div>
-	<div class="sclv-mipheader">
-	[% WRAPPER settingGroup title= mode %][% END %]
+	[%# Chain Settings, collapsible - Henk's request 2026-09-12, second piece of the Live View/       %]
+	[%# Quick Settings merge (after the sc_on toggle above): Filter, Recipe, Reject Size, Style,       %]
+	[%# Variety, ported from quicksettings.html's own collapsible "Chain Settings" <details> section - %]
+	[%# but every control fires scLvSetPref (AJAX, see the JS comment above) instead of                %]
+	[%# this.form.submit(), since Live View must never navigate. Deliberately OUTSIDE/below sclv-top    %]
+	[%# (not pinned) - unlike the icon/status row above, this can grow tall with five controls open,    %]
+	[%# and pinning that much permanently would eat into the room the panels/list below need, the       %]
+	[%# exact "steals room" problem the old sclv-menu-body already got removed for once.                %]
+	[%#                                                                                                 %]
+	[%# sclv_filters/sclv_receipes/sclv_prefs come from Plugin.pm's handleWebList (own names, NOT       %]
+	[%# quicksettings.html's bare 'filters'/'prefs' - 'filters' already means something else on this     %]
+	[%# page, see the Perl comment there). value="" | selected logic mirrors quicksettings.html          %]
+	[%# exactly, including its || fallback numbers on the three ranges (20/0/0) - Plugin.pm falls back    %]
+	[%# to the same numbers when a pref is never set, so an unset pref's slider shows the same value      %]
+	[%# the backend would actually use rather than defaulting to the middle of the range.                %]
+	[%# Henk, 2026-09-12 - "geen marge links": quicksettings.html gets its own left margin from a   %]
+	[%# page-wide padding:15px wrapper around its ENTIRE body, which this page has no equivalent of   %]
+	[%# (Live View's other rows rely on whatever Material's own dialog chrome supplies) - the         %]
+	[%# <summary>'s marker under list-style-position:outside sits right at this element's own edge,   %]
+	[%# so without its own left padding it renders flush against whatever is to its left. Added        %]
+	[%# directly on the <details> itself (15px, matching quicksettings.html's own number) rather       %]
+	[%# than touching sclv-top/sclvbody globally, since nothing else on this page reported the same    %]
+	[%# problem.                                                                                        %]
+	[%#                                                                                                 %]
+	[%# RENAMED "Mix Settings", 2026-09-19 (Henk) - the MIPster-style Batch/Chain merge (see             %]
+	[%# Plugin.pm's buildMIPReq comment for the full story): Batch no longer has its own separate       %]
+	[%# Filter/Recipe/Artist Spacing/Style/Variety/Ask Size, it uses these same five (plus the new      %]
+	[%# MIP Ask Size slider added below) exactly like Chain does, so "Chain Settings" stopped being an  %]
+	[%# accurate name. The id/localStorage key (sclvChainSettings/sclv_chainsettings_open) are left     %]
+	[%# alone - only the label text changed (PLUGIN_SC_WEB_QS_CHAINSETTINGS) - renaming those too would %]
+	[%# have been churn for no behavioural gain. Mood moved in here too, in its own small subsection    %]
+	[%# below Variety - see the comment there for why it still gets special treatment.                 %]
+	<details open id="sclvChainSettings" data-scopen="1" ontoggle="scLvDetailsToggle(this, 'sclv_chainsettings_open')" style="padding:8px 15px 4px 15px;">
+	<summary style="cursor:pointer; font-weight:bold; padding:6px 0; list-style-position:outside;">[% "PLUGIN_SC_WEB_QS_CHAINSETTINGS" | string %]</summary>
+
+	<div class="sclv-setting-row">
+		<label class="stdlabel" for="sclvFilterActive">[% "PLUGIN_SC_WEB_FILTER" | string %]</label>
+		<select class="stdedit" id="sclvFilterActive" onchange="scLvSetPref('sugarcube_filteractive', this.value)">
+		[% FOREACH option IN sclv_filters.keys.sort %]
+			<option [% IF sclv_prefs.sugarcube_filteractive == option %]selected [% END %]value="[% option %]">[% sclv_filters.$option %]</option>
+		[%- END -%]
+		</select>
+	</div>
+
+	<div class="sclv-setting-row">
+		<label class="stdlabel" for="sclvRecipe">[% "PLUGIN_SC_WEB_RECIPE" | string %]</label>
+		<select class="stdedit" id="sclvRecipe" onchange="scLvSetPref('sugarcube_receipes', this.value)">
+		[% FOREACH option IN sclv_receipes.keys.sort %]
+			<option [% IF sclv_prefs.sugarcube_receipes == option %]selected [% END %]value="[% option %]">[% sclv_receipes.$option %]</option>
+		[%- END -%]
+		</select>
+	</div>
+
+	[%# MIP Ask Size, added 2026-09-19 - Henk's Mipster build has this slider here and SC-EXTMIP did %]
+	[%# not; ported across. Same pref (sugarcube_size) player.html's own Ask Size field uses, already %]
+	[%# shared between Chain and Batch since the same-day merge (see Plugin.pm's buildMIPReq comment) %]
+	[%# so this one slider covers both. min/max match player.html's own field (10-300, Henk's own MIP %]
+	[%# instance's ceiling - see PLUGIN_SC_WEB_SIZEDESC). sclv_prefs.sugarcube_size is populated by   %]
+	[%# handleWebList's own foreach, alongside sclv_prefs.sugarcube_filteractive etc above it. Placed %]
+	[%# here, between Recipe and Artist Spacing - Henk's own ordering choice (2026-09-19), not the    %]
+	[%# "Ask Size first" convention player.html's own Chain/Batch sets use.                            %]
+	<div class="sclv-setting-row">
+		<label class="stdlabel" for="sclvSize">[% "PLUGIN_SC_WEB_SIZE" | string %]</label>
+		<input type="range" min="10" max="300" step="1" class="stdedit" id="sclvSize" value="[% sclv_prefs.sugarcube_size || 20 %]" oninput="document.getElementById('sclvSizeVal').textContent=this.value" onchange="scLvSetPref('sugarcube_size', this.value)">
+		<span class="sclv-setting-value" id="sclvSizeVal">[% sclv_prefs.sugarcube_size || 20 %]</span>
+	</div>
+
+	<div class="sclv-setting-row">
+		<label class="stdlabel" for="sclvRejectSize">[% "PLUGIN_SC_WEB_REJECTSIZE" | string %]</label>
+		<input type="range" min="0" max="30" step="1" class="stdedit" id="sclvRejectSize" value="[% sclv_prefs.sugarcube_rejectsize || 0 %]" oninput="document.getElementById('sclvRejectSizeVal').textContent=this.value" onchange="scLvSetPref('sugarcube_rejectsize', this.value)">
+		<span class="sclv-setting-value" id="sclvRejectSizeVal">[% sclv_prefs.sugarcube_rejectsize || 0 %]</span>
+	</div>
+
+	<div class="sclv-setting-row">
+		<label class="stdlabel" for="sclvStyle">[% "PLUGIN_SC_WEB_STYLE" | string %]</label>
+		<input type="range" min="0" max="200" step="1" class="stdedit" id="sclvStyle" value="[% sclv_prefs.sugarcube_style || 0 %]" oninput="document.getElementById('sclvStyleVal').textContent=this.value" onchange="scLvSetPref('sugarcube_style', this.value)">
+		<span class="sclv-setting-value" id="sclvStyleVal">[% sclv_prefs.sugarcube_style || 0 %]</span>
+	</div>
+
+	<div class="sclv-setting-row">
+		<label class="stdlabel" for="sclvVariety">[% "PLUGIN_SC_WEB_VARIETY" | string %]</label>
+		<input type="range" min="0" max="9" step="1" class="stdedit" id="sclvVariety" value="[% sclv_prefs.sugarcube_variety || 0 %]" oninput="document.getElementById('sclvVarietyVal').textContent=this.value" onchange="scLvSetPref('sugarcube_variety', this.value)">
+		<span class="sclv-setting-value" id="sclvVarietyVal">[% sclv_prefs.sugarcube_variety || 0 %]</span>
+	</div>
+
+	[%# Mood, own separate little section within Mix Settings - Henk's request 2026-09-19, third and    %]
+	[%# last piece of the MIPster-style Batch/Chain merge (after Plugin.pm/PlayerSettings.pm - see       %]
+	[%# their own comments - and the MIP Ask Size slider just above). Used to be the first field of its   %]
+	[%# own separate "Mood Batch Settings" <details> below Filter/Recipe/Batch's own copies of            %]
+	[%# Artist Spacing/Style/Variety; that whole panel is gone now that those five are shared with        %]
+	[%# Chain above, and Mood is the one setting left that is genuinely batch-only, so it gets its own    %]
+	[%# small heading + info icon here rather than blending silently into the five shared controls        %]
+	[%# above it. Still guarded by sclv_moods.keys.size, same as the old panel was - hidden entirely on   %]
+	[%# a setup with no moods configured.                                                                 %]
+	[% IF sclv_moods.keys.size %]
+	<hr style="margin:12px 0 4px 0; border:none; border-top:1px solid rgba(255,255,255,0.15);">
+	<div class="sclv-setting-row">
+		<label class="stdlabel" for="sclvSeedMood">[% "PLUGIN_SC_WEB_SEEDMOOD" | string %]</label>
+		<select class="stdedit" id="sclvSeedMood" onchange="scLvSetPref('sugarcube_seedmood', this.value)">
+		[% FOREACH option IN sclv_moods.keys.sort %]
+			<option [% IF sclv_prefs.sugarcube_seedmood == option %]selected [% END %]value="[% option %]">[% sclv_moods.$option %]</option>
+		[%- END -%]
+		</select>
+		[%# Same sc-info-wrap/sc-info-icon/sc-info-popover widget player.html's own scinfosetting        %]
+		[%# WRAPPER uses (scToggleInfo, outer SCRIPT block above) - as its own sibling span after the    %]
+		[%# select now (row layout, 05-10-2026), rather than between label and select as before.         %]
+		<span class="sc-info-wrap">
+			<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+			<div class="sc-info-popover">
+				[% "PLUGIN_SC_WEB_QS_MOODNOTE" | string %]
+				<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+				<div style="clear:both;"></div>
+			</div>
+		</span>
 	</div>
 	[% END %]
-	[% END %]
-	</div>
+
+	</details>
+
+	[%# Henk, 2026-09-12 - runs synchronously right here in document order, guaranteed after both      %]
+	[%# <details> elements above already exist, on the VERY FIRST load as well as every ajaxUpdate     %]
+	[%# swap (see scLvApplyDetailsState's own comment, and its second call site inside scLvRefresh).   %]
+	<script>scLvApplyDetailsState();</script>
 
 	[%# sclv-top closes above regardless of whether there was a track to show in it, so the sticky  %]
-	[%# header is always exactly "Last MIP Response" plus Current/Next Track when there is one. The  %]
-	[%# MusicIP Track Recommendations table (or the "waiting for MusicIP" placeholder) below stays   %]
-	[%# in normal document flow, so it scrolls under the pinned header above rather than needing its  %]
-	[%# own overflow container. Same "track is not blank" test as sclv-top, run again rather than     %]
-	[%# nested through the div boundary - cheap and keeps both halves independently readable.         %]
+	[%# header is always exactly Current/Next Track when there is one; the menu below is its own      %]
+	[%# separate block, not nested through the div boundary - cheap and keeps both halves             %]
+	[%# independently readable. Same "track is not blank" test as sclv-top, run again.                %]
 	[% IF track != '' %]
 	[% IF mixstatus == '' %]
 	<div class="filler2"></div>
-	<table class='bottomside'>
-		[% filters %]
-	</table>
+	[%# sclv-menu, REPLACED 2026-09-12 (Henk) - Last MIP Response and History are now two separate    %]
+	[%# full-height overlay panels (opened from the sclvMenuDropdown menu near the top of sclv-top),  %]
+	[%# instead of the 2026-09-11 accordion's two <details> sections. Neither panel starts "open" in  %]
+	[%# the markup anymore (unlike the old accordion, which hardcoded Last MIP Response open) - both  %]
+	[%# start closed, and scLvRefresh's scLvOpenPanelId re-opens whichever one the user had open       %]
+	[%# across an ajaxUpdate refresh (see the JS comment above scLvPanelOpen/scLvRefresh).             %]
+	<div id="sclvPanelMip" class="sclv-panel">
+		<div class="sclv-panel-header">
+			<button type="button" onclick="scLvPanelClose()" class="sc-livebtn-icon" aria-label="Back" title="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg></button>
+			[%# Henk, 2026-09-12 - "Last Response: <date>" here, not mode's own "Last MIP Response:     %]
+			[%# <date>" - the menu entry above already says "MIP Response", so repeating "MIP" in the  %]
+			[%# opened panel's own heading read as redundant. mip_date is the bare stamp Plugin.pm      %]
+			[%# hands over for exactly this (see the mip_date comment there) - same "no date -> no      %]
+			[%# colon" rule as Edit 52's original mode string, just re-applied to the new wording.      %]
+			<span>Last Response[% IF mip_date %]: [% mip_date %][% END %]</span>
+		</div>
+		<div class="sclv-panel-body">
+			<table class='bottomside'>
+				[% filters %]
+			</table>
+		</div>
+	</div>
+	<div id="sclvPanelHistory" class="sclv-panel">
+		<div class="sclv-panel-header">
+			<button type="button" onclick="scLvPanelClose()" class="sc-livebtn-icon" aria-label="Back" title="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z"/></svg></button>
+			<span>History</span>
+		</div>
+		<div class="sclv-panel-body">
+			<table class='bottomside'>
+				[% history %]
+			</table>
+		</div>
+	</div>
 		[% END %]
 	[% ELSE %]
-	[%# Henk, 2026-09-04 - "New Mix" clears the playlist and asks MIP for a fresh one; MIP's own    %]
-	[%# reply is async, same as always (mixfromplaying/AutoStartMix), so there's a genuine gap       %]
-	[%# between the click and the first track actually starting. Reaching Live View the normal way   %]
-	[%# (via quickplay.html's 3-second splash) usually hides that gap - by the time you land here,   %]
-	[%# MIP has often already answered. Clicking "New Mix" from Live View itself has no such buffer, %]
-	[%# so the same wait was showing as a bare blank page instead - this message fills that gap.      %]
+	[%# Henk, 05-10-2026 - this used to print a hardcoded "Starting new chain - waiting for         %]
+	[%# MusicIP..." regardless of why mixstatus is non-empty, so it also showed during a genuine     %]
+	[%# error (MIP unreachable, no Filter set). mixstatus already holds the real reason, so print    %]
+	[%# that instead. %]
 	<hr>
 	<div class="filler1"></div>
-	<p>Starting new mix - waiting for MusicIP...</p>
+	<p>[% mixstatus %]</p>
 	[% END %]
 
 [%- IF !ajaxUpdate %]

@@ -1,0 +1,224 @@
+[% PROCESS settings/header.html %]
+
+[% PROCESS plugins/SugarCube/settings/subpage_chooser.html %]
+
+[%# Same info-popover widget as settings.html's own copy - duplicated rather than shared through an %]
+[%# include, same reasoning as MIPster's mipm-info: a failed include path would take both pages     %]
+[%# down at once, and these are static. If you change one, change the other (and player.html's).    %]
+<style type="text/css">
+	.sc-info-wrap { position:relative; display:inline-block; }
+	.sc-info-icon { cursor:pointer; opacity:0.7; padding-left:8px; }
+	.sc-info-popover {
+		display:none; position:absolute; z-index:1000; top:100%; left:0; margin-top:6px;
+		width:300px; max-width:80vw; background:#2b2b2b; color:#fff;
+		border-radius:8px; padding:16px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+		font-size:0.85em; line-height:1.4;
+	}
+	.sc-info-popover button {
+		background:none; border:1px solid #9c9; color:#9c9; border-radius:16px;
+		padding:6px 16px; cursor:pointer; float:right; margin-top:12px;
+	}
+</style>
+<script type="text/javascript">
+	function scToggleInfo(el) {
+		var pop = el.nextElementSibling;
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p !== pop) { p.style.display = 'none'; }
+		});
+		var opening = (pop.style.display !== 'block');
+		pop.style.left = '0';
+		pop.style.display = opening ? 'block' : 'none';
+		if (opening) {
+			var scInfoMargin = 8;
+			var rect = pop.getBoundingClientRect();
+			var shift = 0;
+			if (rect.right > window.innerWidth - scInfoMargin) {
+				shift = (window.innerWidth - scInfoMargin) - rect.right;
+			}
+			if (rect.left + shift < scInfoMargin) {
+				shift = scInfoMargin - rect.left;
+			}
+			pop.style.left = shift + 'px';
+		}
+	}
+	document.addEventListener('click', function(e) {
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p.style.display === 'block' && !p.closest('.sc-info-wrap').contains(e.target)) {
+				p.style.display = 'none';
+			}
+		});
+	});
+</script>
+
+[% BLOCK scinfosetting %]
+<div style="padding:4px 0 4px 4px;">
+	[% IF title %]<label class="stdlabel">[% title | string %]</label>[% END %]
+	[% IF desc %]
+	<span class="sc-info-wrap">
+		<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+		<div class="sc-info-popover">
+			[% desc | string %]
+			<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+			<div style="clear:both;"></div>
+		</div>
+	</span>
+	[% END %]
+	<br>
+	[% content %]
+</div>
+[% END %]
+
+[%# THE EXPORT STATUS LINE, ported from MIPster - above every setting, deliberately. Red is the     %]
+[%# default and green is only for success, so red covers running, aborted and finished-with-errors  %]
+[%# alike: MusicIP's data is not to be trusted right now, which is true while an export is writing   %]
+[%# to it and true after one that failed. The result lives in sc_mipexport_result, so the line shows %]
+[%# the LAST export's result whenever the page is opened, not only while one is running - unlike     %]
+[%# settings.html's own version of this box, this one animates while running (the original plugin's  %]
+[%# pulsing-dot keyframe, restored here now that this is the page the export actually lives on).     %]
+<style>
+.sc-mipexport-statuswrapper { padding: 4px 0 10px 0; min-height: 1.4em; }
+.sc-mipexport-status { font-size: 105%; font-weight: bold; color: #b00020; }
+.sc-mipexport-status.sc-mipexport-success { color: green; }
+.sc-mipexport-status.sc-mipexport-running:after { content: ' .'; animation: sc-mipexport-dots 1.8s steps(5,end) infinite; }
+@keyframes sc-mipexport-dots {
+	0%, 20% { color: rgba(0,0,0,0); text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); }
+	40% { color: #b00020; text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0); }
+	60% { text-shadow: .25em 0 0 #b00020, .5em 0 0 rgba(0,0,0,0); }
+	80%, 100% { text-shadow: .25em 0 0 #b00020, .5em 0 0 #b00020; }
+}
+</style>
+<p id="sc_mipexport_statusmsg" class="sc-mipexport-status"></p>
+
+[% IF scbandserror %]
+<p class="sc-mipexport-status">[% "PLUGIN_SC_WEB_MIPEXPORT_BANDS_REFUSED" | string %]</p>
+[% END %]
+[% IF scbandsrestored %]
+<p class="sc-mipexport-status sc-mipexport-success">[% "PLUGIN_SC_WEB_MIPEXPORT_BANDSRESTORED" | string %]</p>
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_NOW" desc="" %]
+	<input class="stdclick" id="sc_mipexport_exportnow" name="sc_mipexport_exportnow" type="submit" value="[% "PLUGIN_SC_WEB_MIPEXPORT_NOW_BUTTON" | string %]"[% IF activemipexport or activelmsscan %] disabled[% END %]>
+	<input class="stdclick" id="sc_mipexport_abort" name="sc_mipexport_abort" type="submit" value="[% "PLUGIN_SC_WEB_MIPEXPORT_ABORT_BUTTON" | string %]" style="margin-left:10px;"[% IF activelmsscan %] disabled[% END %]>
+[% END %]
+
+[%# TWO AUTOMATIC CONTROLS, NOT THREE, ported from MIPster's own decision - no separate master        %]
+[%# on/off switch. A BLANK TIME IS THE OFF SWITCH for the daily export, and Post-scan answers for     %]
+[%# itself below, independently. Do not add a master switch back.                                     %]
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_SCHEDULETIME" desc="PLUGIN_SC_WEB_MIPEXPORT_SCHEDULETIMEDESC" %]
+	<input type="text" class="stdedit" name="sc_mipexport_time" id="sc_mipexport_time" value="[% prefs.sc_mipexport_time %]" size="5" />
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_POSTSCAN" desc="PLUGIN_SC_WEB_MIPEXPORT_POSTSCANDESC" %]
+	<select class="stdedit" name="sc_mipexport_postscan" id="sc_mipexport_postscan">
+		<option [% IF NOT prefs.sc_mipexport_postscan %]selected [% END %]value="0">[% 'NO' | getstring %]</option>
+		<option [% IF prefs.sc_mipexport_postscan %]selected [% END %]value="1">[% 'YES' | getstring %]</option>
+	</select>
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_REPLACEEXT" desc="PLUGIN_SC_WEB_MIPEXPORT_REPLACEEXTDESC" %]
+	<input type="text" class="stdedit" name="sc_mipexport_replaceextension" id="sc_mipexport_replaceextension" value="[% prefs.sc_mipexport_replaceextension %]" size="6" />
+[% END %]
+
+<hr><br>
+
+[%# THE CAUTION, ported from MIPster - printed on the page rather than hidden behind a help icon: it %]
+[%# is the reason the six rows below are almost never the right thing to touch.                       %]
+<div style="padding:4px 0 12px 0;">[% "PLUGIN_SC_WEB_MIPEXPORT_CAUTION" | string %]</div>
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_UNRATED" desc="PLUGIN_SC_WEB_MIPEXPORT_UNRATEDDESC" %]
+	<select class="stdedit" name="sc_mipexport_unrated" id="sc_mipexport_unrated">
+		[% FOREACH n = [0,1,2,3,4,5] %]
+		<option [% IF prefs.sc_mipexport_unrated == n %]selected [% END %]value="[% n %]">[% n %]</option>
+		[%- END -%]
+	</select>
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_BAND1" desc="PLUGIN_SC_WEB_MIPEXPORT_BAND1DESC" %]
+	<input type="text" class="stdedit" name="sc_mipexport_band1" id="sc_mipexport_band1" value="[% prefs.sc_mipexport_band1 %]" size="3">
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_BAND2" desc="PLUGIN_SC_WEB_MIPEXPORT_BANDDESC" %]
+	<input type="text" class="stdedit" name="sc_mipexport_band2" id="sc_mipexport_band2" value="[% prefs.sc_mipexport_band2 %]" size="3">
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_BAND3" desc="PLUGIN_SC_WEB_MIPEXPORT_BANDDESC" %]
+	<input type="text" class="stdedit" name="sc_mipexport_band3" id="sc_mipexport_band3" value="[% prefs.sc_mipexport_band3 %]" size="3">
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_BAND4" desc="PLUGIN_SC_WEB_MIPEXPORT_BANDDESC" %]
+	<input type="text" class="stdedit" name="sc_mipexport_band4" id="sc_mipexport_band4" value="[% prefs.sc_mipexport_band4 %]" size="3">
+[% END %]
+
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_BAND5" desc="PLUGIN_SC_WEB_MIPEXPORT_BANDDESC" %]
+	<input type="text" class="stdedit" name="sc_mipexport_band5" id="sc_mipexport_band5" value="[% prefs.sc_mipexport_band5 %]" size="3">
+[% END %]
+
+[%# RESTORE DEFAULTS does not go through the validator, ported from MIPster - the stock scale is    %]
+[%# valid by definition, and needing a valid page to get back to a valid page would be a trap.       %]
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPEXPORT_BANDS_RESTORE" desc="PLUGIN_SC_WEB_MIPEXPORT_BANDS_RESTOREDESC" %]
+	<input class="stdclick" id="screstorebands" name="screstorebands" type="submit" value="[% "PLUGIN_SC_WEB_MIPEXPORT_BANDS_RESTORE" | string %]">
+[% END %]
+
+[% PROCESS settings/footer.html %]
+
+[%# STATUS POLLING, same mechanism settings.html's own POC box used - poll the generic 'pref'        %]
+[%# JSON-RPC command for this plugin's own prefs. Ported to use the string-token status messages      %]
+[%# (PLUGIN_SC_WEB_MIPEXPORT_STATUS_*) instead of hardcoded English, matching MIPster.                %]
+<script type="text/javascript">
+	var sc_mipexport_poll;
+
+	function sc_mipexport_getPref(prefName) {
+		const serverjsonurl = "[% squeezebox_server_jsondatareq %]";
+		let vsBody = JSON.stringify({
+			id: 1,
+			method: 'slim.request',
+			params: ['', ['pref', 'plugin.SugarCube:' + prefName, '?']]
+		});
+
+		fetch(serverjsonurl, {
+			method: "post",
+			headers: { "Content-Type": "application/json", "Origin": window.location.hostname },
+			body: vsBody
+		}).then(function(response) {
+			if (!response.ok) { throw new Error("HTTP error " + response.status); }
+			return response.json();
+		}).then(function(jsonData) {
+			const resultVal = Object.values(jsonData.result)[0];
+			const msg = document.getElementById('sc_mipexport_statusmsg');
+			const btnNow = document.getElementById('sc_mipexport_exportnow');
+
+			if (prefName === 'sc_mipexport_inprogress') {
+				if (resultVal == 1) {
+					if (btnNow) { btnNow.disabled = true; }
+					msg.className = 'sc-mipexport-status sc-mipexport-running';
+					msg.textContent = "[% 'PLUGIN_SC_WEB_MIPEXPORT_STATUS_RUNNING' | string %]";
+				} else {
+					if (btnNow) { btnNow.disabled = false; }
+					clearInterval(sc_mipexport_poll);
+					sc_mipexport_getPref('sc_mipexport_result');
+				}
+			} else if (prefName === 'sc_mipexport_result') {
+				msg.className = 'sc-mipexport-status';
+				if (resultVal == 1) {
+					msg.classList.add('sc-mipexport-success');
+					msg.textContent = "[% 'PLUGIN_SC_WEB_MIPEXPORT_STATUS_DONE' | string %]";
+				} else if (resultVal == 2) {
+					msg.textContent = "[% 'PLUGIN_SC_WEB_MIPEXPORT_STATUS_ABORTED' | string %]";
+				} else if (resultVal == 3) {
+					msg.textContent = "[% 'PLUGIN_SC_WEB_MIPEXPORT_STATUS_ERRORS' | string %]";
+				} else {
+					msg.textContent = '';
+				}
+			}
+		}).catch(function(error) {
+			console.log(error);
+		});
+	}
+
+	window.addEventListener("load", function() {
+		sc_mipexport_getPref('sc_mipexport_inprogress');
+		sc_mipexport_poll = setInterval(function() {
+			sc_mipexport_getPref('sc_mipexport_inprogress');
+		}, 10000);
+	});
+</script>

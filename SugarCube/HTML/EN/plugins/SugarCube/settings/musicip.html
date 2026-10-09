@@ -1,0 +1,198 @@
+[% PROCESS settings/header.html %]
+
+[% PROCESS plugins/SugarCube/settings/subpage_chooser.html %]
+
+[%# Same info-popover widget as settings.html's own copy - duplicated rather than shared through an %]
+[%# include, same reasoning as MIPster's mipm-info: a failed include path would take both pages     %]
+[%# down at once, and these are static. If you change one, change the other (and player.html's).    %]
+<style type="text/css">
+	.sc-info-wrap { position:relative; display:inline-block; }
+	.sc-info-icon { cursor:pointer; opacity:0.7; padding-left:8px; }
+	.sc-info-popover {
+		display:none; position:absolute; z-index:1000; top:100%; left:0; margin-top:6px;
+		width:300px; max-width:80vw; background:#2b2b2b; color:#fff;
+		border-radius:8px; padding:16px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+		font-size:0.85em; line-height:1.4;
+	}
+	.sc-info-popover button {
+		background:none; border:1px solid #9c9; color:#9c9; border-radius:16px;
+		padding:6px 16px; cursor:pointer; float:right; margin-top:12px;
+	}
+</style>
+<script type="text/javascript">
+	function scToggleInfo(el) {
+		var pop = el.nextElementSibling;
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p !== pop) { p.style.display = 'none'; }
+		});
+		var opening = (pop.style.display !== 'block');
+		pop.style.left = '0';
+		pop.style.display = opening ? 'block' : 'none';
+		if (opening) {
+			var scInfoMargin = 8;
+			var rect = pop.getBoundingClientRect();
+			var shift = 0;
+			if (rect.right > window.innerWidth - scInfoMargin) {
+				shift = (window.innerWidth - scInfoMargin) - rect.right;
+			}
+			if (rect.left + shift < scInfoMargin) {
+				shift = scInfoMargin - rect.left;
+			}
+			pop.style.left = shift + 'px';
+		}
+	}
+	// Gates the Add-folder text field behind a checkbox, same pattern as MIP's own index page -
+	// most setups never need a different path than Z:\music.
+	function scMipToggleAddRoot(cb) {
+		var f = document.getElementById('sc_mip_add_root');
+		f.disabled = !cb.checked;
+		f.value = cb.checked ? 'Z:\\music' : '';
+	}
+	document.addEventListener('click', function(e) {
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p.style.display === 'block' && !p.closest('.sc-info-wrap').contains(e.target)) {
+				p.style.display = 'none';
+			}
+		});
+	});
+</script>
+
+[% BLOCK scinfosetting %]
+<div style="padding:4px 0 4px 4px;">
+	[% IF title %]<label class="stdlabel">[% title | string %]</label>[% END %]
+	[% IF desc %]
+	<span class="sc-info-wrap">
+		<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+		<div class="sc-info-popover">
+			[% desc | string %]
+			<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+			<div style="clear:both;"></div>
+		</div>
+	</span>
+	[% END %]
+	<br>
+	[% content %]
+</div>
+[% END %]
+
+[%# MIP Cache status, mirrors the "Cache" stats on MIP's own index page. Self-polls below, same %]
+[%# pattern as Live View - subpage switching here is a plain location.href navigation, not an SPA %]
+[%# swap, so a setInterval is torn down cleanly whenever the user leaves this page. %]
+<div id="sc-mip-cache-block" style="padding:4px 0 4px 4px;">
+	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE" | string %]</label>
+	[% IF prefs.mip_version %]
+	<div style="opacity:0.6; font-size:0.8em;">[% prefs.mip_version %]</div>
+	[% END %]
+	<div style="display:flex; gap:24px; flex-wrap:wrap; margin:6px 0;">
+		<div>
+			<span style="opacity:0.7; font-size:0.85em;">[% "PLUGIN_SC_WEB_MIPCACHE_TOTAL" | string %]</span><br>
+			<b>[% prefs.mip_total %]</b>
+		</div>
+		<div>
+			<span style="opacity:0.7; font-size:0.85em;">[% "PLUGIN_SC_WEB_MIPCACHE_MIXABLE" | string %]</span><br>
+			<b>[% prefs.mip_mixable %]</b>
+		</div>
+		<div>
+			<span style="opacity:0.7; font-size:0.85em;">[% "PLUGIN_SC_WEB_MIPCACHE_TODO" | string %]</span><br>
+			<b>[% prefs.mip_todo %]</b>
+		</div>
+	</div>
+	<div style="opacity:0.8; font-size:0.9em;">
+		[% "PLUGIN_SC_WEB_MIPCACHE_STATUS" | string %]: [% prefs.mip_active %]
+	</div>
+	[% IF prefs.mip_reload %]
+	<div style="margin-top:8px; padding:6px 10px; background:#4a3a1a; border-radius:6px; display:flex; align-items:center; gap:10px;">
+		<span style="color:#e6b800;">&#9888; [% "PLUGIN_SC_WEB_MIPCACHE_RELOAD_NOTICE" | string %]</span>
+		<input type="submit" class="stdclick" name="sc_mip_cache_reload" value="[% "PLUGIN_SC_WEB_MIPCACHE_RELOAD" | string %]" style="margin-left:auto;">
+	</div>
+	[% END %]
+</div>
+
+<script type="text/javascript">
+(function () {
+	// Also swaps the one-shot feedback blocks below, so they clear themselves on the next poll
+	// instead of staying on screen forever (they live outside sc-mip-cache-block on purpose, so the
+	// poll never touches the input fields next to them).
+	var scMipIds = ['sc-mip-cache-block', 'sc-mip-cache-feedback', 'sc-mip-validate-feedback'];
+	function scMipPoll() {
+		var r = new XMLHttpRequest();
+		r.open('GET', location.href, true);
+		r.onload = function () {
+			if (r.status !== 200) { return; }
+			var doc = new DOMParser().parseFromString(r.responseText, 'text/html');
+			scMipIds.forEach(function (id) {
+				var src = doc.getElementById(id);
+				var dst = document.getElementById(id);
+				if (src && dst) { dst.innerHTML = src.innerHTML; }
+			});
+		};
+		r.send();
+	}
+	setInterval(scMipPoll, 4000);
+})();
+</script>
+
+[%# Cache actions - same three requests MIP's own page offers. Not inside #sc-mip-cache-block, so %]
+[%# the live poll above never wipes out whatever the user is typing here. %]
+<div style="padding:4px 0 4px 4px;">
+	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE_ACTIONS" | string %]</label>
+	<br>
+	[% UNLESS prefs.mip_mixer %]
+	<input type="checkbox" id="sc_mip_add_differs" onchange="scMipToggleAddRoot(this)">
+	<label for="sc_mip_add_differs">[% "PLUGIN_SC_WEB_MIPCACHE_ADD_DIFFERS" | string %]</label>
+	<br>
+	<input type="text" class="stdedit" id="sc_mip_add_root" name="sc_mip_add_root" placeholder="Z:\music" size="30" disabled>
+	<input type="submit" class="stdclick" name="sc_mip_cache_add" value="[% "PLUGIN_SC_WEB_MIPCACHE_ADD" | string %]">
+	<br><br>
+	<input type="text" class="stdedit" name="sc_mip_search_query" value="[% prefs.mip_search_query %]" placeholder="Artist, title, album..." size="30">
+	<input type="submit" class="stdclick" name="sc_mip_cache_search" value="[% "PLUGIN_SC_WEB_MIPCACHE_SEARCH" | string %]">
+	<br><br>
+	[% END %]
+	<input type="submit" class="stdclick" name="sc_mip_cache_refresh" value="[% "PLUGIN_SC_WEB_MIPCACHE_REFRESH" | string %]">
+	[% IF prefs.mip_mixer %]
+	<div style="opacity:0.7; font-size:0.85em; margin-top:8px;">Adding music, searching and validation are not available with MusicIP Mixer - use the Mixer GUI.</div>
+	[% END %]
+
+	<div id="sc-mip-cache-feedback">
+	[% IF prefs.mip_cache_feedback == 'sent' %]
+	<div style="opacity:0.8; font-size:0.9em; margin-top:6px;">[% "PLUGIN_SC_WEB_MIP_SENT" | string %]</div>
+	[% ELSIF prefs.mip_cache_feedback == 'failed' %]
+	<div style="opacity:0.8; font-size:0.9em; margin-top:6px; color:#e66;">[% "PLUGIN_SC_WEB_MIP_FAILED" | string %]</div>
+	[% ELSIF prefs.mip_cache_feedback == 'empty' %]
+	<div style="opacity:0.8; font-size:0.9em; margin-top:6px; color:#e66;">[% "PLUGIN_SC_WEB_MIPCACHE_EMPTY" | string %]</div>
+	[% END %]
+	</div>
+
+	[% IF prefs.mip_search_result %]
+	<div style="margin-top:10px;">
+		<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE_SEARCH_RESULT" | string %]</label>
+		<pre style="white-space:pre-wrap; background:#1a1a1a; padding:8px; border-radius:6px; max-height:300px; overflow:auto; font-size:0.85em;">[% prefs.mip_search_result | html %]</pre>
+	</div>
+	[% END %]
+</div>
+
+[%# Validation - CPU use posts to MIP immediately on change; Start/Stop act without touching any SC pref. %]
+[% UNLESS prefs.mip_mixer %]
+<div style="padding:4px 0 4px 4px;">
+	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPVALIDATE" | string %]</label>
+	<br>
+	<select class="stdedit" name="sc_mip_cpuuse" onchange="this.form.submit()">
+		<option value="0" [% 'selected' IF prefs.mip_cpuuse == '0' %]>[% "PLUGIN_SC_WEB_MIPVALIDATE_MAX" | string %]</option>
+		<option value="1" [% 'selected' IF prefs.mip_cpuuse == '1' %]>[% "PLUGIN_SC_WEB_MIPVALIDATE_MODERATE" | string %]</option>
+		<option value="2" [% 'selected' IF prefs.mip_cpuuse == '2' %]>[% "PLUGIN_SC_WEB_MIPVALIDATE_LOW" | string %]</option>
+	</select>
+	<div style="margin-top:8px;">
+		<input type="submit" class="stdclick" name="sc_mip_validate_start" value="[% "PLUGIN_SC_WEB_MIPVALIDATE_START" | string %]">
+		<input type="submit" class="stdclick" name="sc_mip_validate_stop" value="[% "PLUGIN_SC_WEB_MIPVALIDATE_STOP" | string %]">
+	</div>
+	<div id="sc-mip-validate-feedback">
+	[% IF prefs.mip_validate_feedback == 'sent' %]
+	<div style="opacity:0.8; font-size:0.9em; margin-top:6px;">[% "PLUGIN_SC_WEB_MIP_SENT" | string %]</div>
+	[% ELSIF prefs.mip_validate_feedback == 'failed' %]
+	<div style="opacity:0.8; font-size:0.9em; margin-top:6px; color:#e66;">[% "PLUGIN_SC_WEB_MIP_FAILED" | string %]</div>
+	[% END %]
+	</div>
+</div>
+[% END %]
+
+[% PROCESS settings/footer.html %]

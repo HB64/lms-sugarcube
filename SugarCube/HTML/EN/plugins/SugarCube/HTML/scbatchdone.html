@@ -1,0 +1,25 @@
+[% pagetitle = 'PLUGIN_SUGARCUBE' | string %]
+[% pwd_list = [ pagetitle ] %]
+[% PROCESS pageheader.html %]
+<style>
+@charset "UTF-8";
+.wrapper {padding: 8px;}
+</style>
+<br>
+	<div class="wrapper">
+		[% IF scbatchdone %]
+			[% scbatchmsg %]
+		[% ELSE %]
+			[% "PLUGIN_SC_BATCH_FAILED" | string %]
+		[% END %]
+	</div>
+
+[% IF scbatchdone %]
+<script type="text/javascript">
+	// Go back to whatever you were browsing. Deliberately history.back() rather than a
+	// constructed URL: the item can be reached from a track page, an album page or a folder,
+	// and guessing which would get it wrong two times in three.
+	setTimeout(function() { history.back(); }, 1200);
+</script>
+[% END %]
+[% PROCESS pagefooter.html %]

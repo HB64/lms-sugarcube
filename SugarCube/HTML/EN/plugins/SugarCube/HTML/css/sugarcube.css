@@ -21,7 +21,7 @@ table.topside thead th {
   border-radius:10px 10px 10px 10px;
 }
 
-/* Currently Playing and Coming Up Next */
+/* Current Track and Next Track - the two panel headings, renamed Edit 53 */
 table.midside {
   width: 100%;
   text-align: left;

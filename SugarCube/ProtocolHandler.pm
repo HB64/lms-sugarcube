@@ -1,48 +1,45 @@
+# Spicefly - SugarCube
+# Developed by Charles Parker
+# Modifications by AF, (c) 2024
+# Licensed under the GPLv3 - see LICENSE file
+#
+
 package Plugins::SugarCube::ProtocolHandler;
 
-# $Id
-
-# Squeezebox Server Copyright 2001-2009 Logitech.
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License,
-# version 2.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
 use strict;
+use warnings;
 use Plugins::SugarCube::Plugin;
 use Slim::Utils::Log;
-my $log = Slim::Utils::Log->addLogCategory({
-	'category'     => 'plugin.sugarcube',
-	'defaultLevel' => 'DEBUG',
-	'description'  => getDisplayName(),
-});
-
-sub getDisplayName {return 'PLUGIN_SUGARCUBE';}
+my $log = logger('plugin.sugarcube');
 
 sub overridePlayback {
-	my ( $class, $client, $url ) = @_;
+	my ($class, $client, $url) = @_;
 
 	if ($url !~ m|^sugarcube:(.*)$|) {
 		return undef;
 	}
-	$log->debug("ProtocolHandler; Firing");
-    Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 1, \&Plugins::SugarCube::Plugin::AlarmFired, $client);
+	my $kind = $1;
+
+	# Henk, 2026-08-30: two alarm placeholders now (see Plugin.pm's getAlarmPlaylists) -
+	# 'sugarcube:track' (the original, a continuous Chain mix) and 'sugarcube:batch' (an SC
+	# Batch). Everything else about this handler - the match, the 1-second delay, the return
+	# value - is unchanged; only which sub gets timered depends on which placeholder fired.
+	if ($kind eq 'batch') {
+		$log->debug("ProtocolHandler; Firing (batch)");
+		Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 1, \&Plugins::SugarCube::Plugin::AlarmFiredBatch, $client);
+	} else {
+		$log->debug("ProtocolHandler; Firing");
+		Slim::Utils::Timers::setTimer($client, Time::HiRes::time() + 1, \&Plugins::SugarCube::Plugin::AlarmFired, $client);
+	}
 	return 1;
 }
 
 sub canDirectStream { 0 }
 
-sub contentType {
-	return 'sugarcube';
-}
+sub contentType { return 'sugarcube'; }
 
 sub isRemote { 0 }
 
-sub getIcon {
-	return Plugins::SugarCube::Plugin->_pluginDataFor('icon');
-}
+sub getIcon { return Plugins::SugarCube::Plugin->_pluginDataFor('icon'); }
+
 1;
