@@ -456,6 +456,14 @@ sub postinitPlugin {
 			$prefs->client($client)->set('sugarcube_dstm_saved_provider', $dstm);
 			$log->info('SC Chain switched on for ' . $client->name . ' - switching DSTM off (was: ' . $dstm . ')');
 			$dstmClient->execute(['playerpref', 'plugin.dontstopthemusic:provider', 0]);
+
+			# DSTM may already have queued a whole batch of its own picks (e.g. Track Mix adds several
+			# at once) before Chain got switched back on - those don't meet SC's own Mix Settings. Warn
+			# rather than silently clearing them; the user decides (e.g. Replace Track).
+			my $ahead = Plugins::SugarCube::Breakout::CheckPosition($client);
+			if ($ahead > 2) {
+				scTellUser($client, $client->string('PLUGIN_SC_POPUP_DSTM_QUEUE'), 'info', 10);
+			}
 		} else {
 			# Chain Mode just switched OFF - give DSTM back whatever it had before, if anything was
 			# saved. The saved value is cleared straight after, so a later Chain-off with nothing new
@@ -769,16 +777,17 @@ sub jiveSugarCubeMenu {
 		$request->setStatusNeedsClient();
 		return;
 	}
-	# MIP request size. The page has a 10-100 slider; Jive gets four steps to tap through, which
-	# is all this setting needs in practice. selectedIndex is 1-based. Matched by RANGE rather
-	# than exact value, the same way Mix Style is, so a player already on something off-step
-	# (51, say) shows the nearest step instead of showing nothing selected.
-	# '//' NOT '||' - see the note above %clientDefaults. A stored 0 is a VALUE, not a missing value.
+	# MIP request size, matching the web page's 10-300 range (Henk, 2026-10-10) - was a 4-step
+	# 20/40/60/80 list, the Jive menu's own choice-count limit, never a MIP ceiling. selectedIndex
+	# is 1-based, matched to the nearest step by midpoint so an off-step value (51, say) shows the
+	# closest choice instead of nothing selected. '//' NOT '||' - a stored 0 is a VALUE.
 	my $sugarcube_size_j = $prefs->client($client)->get('sugarcube_size') // 20;
+	my @size_menu_values = (10, 20, 40, 60, 80, 100, 150, 200, 250, 300);
 	my $size_menu = 1;
-	if    ($sugarcube_size_j >= 70) { $size_menu = 4 }
-	elsif ($sugarcube_size_j >= 50) { $size_menu = 3 }
-	elsif ($sugarcube_size_j >= 30) { $size_menu = 2 }
+	for my $i (1 .. $#size_menu_values) {
+		my $midpoint = ($size_menu_values[$i - 1] + $size_menu_values[$i]) / 2;
+		$size_menu = $i + 1 if ($sugarcube_size_j >= $midpoint);
+	}
 
 	my $sugarcube_style = $prefs->client($client)->get('sugarcube_style') || 0;
 	my $style_menu;
@@ -858,26 +867,16 @@ sub jiveSugarCubeMenu {
 		{
 			text => Slim::Utils::Strings::string('PLUGIN_SUGARCUBE_JIVE_SIZE'),
 			selectedIndex => $size_menu,
-			choiceStrings => [ "20", "40", "60", "80" ],
+			choiceStrings => [ map { "$_" } @size_menu_values ],
 			actions => {
 				do => {
 					choices => [
-						{
-							player => 0,
-							cmd => [ 'sugarcube', 'setting', 'sugarcube_size:20' ],
-						},
-						{
-							player => 0,
-							cmd => [ 'sugarcube', 'setting', 'sugarcube_size:40' ],
-						},
-						{
-							player => 0,
-							cmd => [ 'sugarcube', 'setting', 'sugarcube_size:60' ],
-						},
-						{
-							player => 0,
-							cmd => [ 'sugarcube', 'setting', 'sugarcube_size:80' ],
-						},
+						map {
+							{
+								player => 0,
+								cmd => [ 'sugarcube', 'setting', "sugarcube_size:$_" ],
+							}
+						} @size_menu_values
 					],
 				},
 			},
@@ -3156,6 +3155,8 @@ sub scTellUser {
 	my $client = shift;
 	my $msg = shift;
 	my $type = shift // 'info'; # 'info' or 'error' - Material accepts only those two
+	my $duration = shift // 5; # seconds the popup stays up - same default as before for every
+								 # existing caller, override per call for one that needs longer
 
 	return unless defined $client && defined $msg && length $msg;
 
@@ -3178,7 +3179,7 @@ sub scTellUser {
 	if ($hasdisplay) {
 		$client->showBriefly(
 			{ 'line' => [ $client->string('PLUGIN_SUGARCUBE'), $msg ] },
-			5
+			$duration
 		);
 	}
 
@@ -3202,7 +3203,7 @@ sub scTellUser {
 		my $who = Slim::Player::Client::name($client) // '';
 		my $matmsg = length $who ? "$who: $msg" : $msg;
 		Slim::Control::Request::executeRequest (undef,
-			[ 'material-skin', 'send-notif', 'type:info', 'msg:' . $matmsg, 'timeout:5' ]);
+			[ 'material-skin', 'send-notif', 'type:info', 'msg:' . $matmsg, 'timeout:' . $duration ]);
 	}
 }
 

@@ -1,4 +1,5 @@
 [%- IF !ajaxUpdate %]
+<meta name="viewport" content="width=device-width, initial-scale=1">
 [% pagetitle = 'PLUGIN_SUGARCUBELV' | string; pageicon = 'PLUGIN_SUGARCUBELV' %]
 [%- pwd_list = BLOCK -%]/
 	<a href="[% webroot %][% path %]?player=[% player | uri %][% statisticparameters %]">
@@ -268,6 +269,17 @@
 					var elapsed = (data && data.result && parseFloat(data.result.time)) || 0;
 					var pct = (dur > 0) ? Math.min(100, Math.max(0, (elapsed / dur) * 100)) : 0;
 					fill.style.width = pct + '%';
+					[%# Henk, 2026-10-10 - elapsed/duration time labels, ported from Random Flow's own    %]
+					[%# progress bar. Reuses the elapsed/dur this same poll already computed above.        %]
+					var fmtTime = function(sec) {
+						sec = Math.round(sec) || 0;
+						var m = Math.floor(sec / 60), s = sec % 60;
+						return m + ':' + (s < 10 ? '0' : '') + s;
+					};
+					var elapsedEl = document.getElementById('scElapsedTime');
+					var durationEl = document.getElementById('scDurationTime');
+					if (elapsedEl) { elapsedEl.textContent = fmtTime(elapsed); }
+					if (durationEl) { durationEl.textContent = fmtTime(dur); }
 				}
 			}
 			catch (e) {}
@@ -524,14 +536,20 @@
 						+ 'border-bottom:1px solid var(--list-item-border-color, rgba(128,128,128,0.25));'
 						+ (isCur ? 'background:rgba(128,128,128,0.18);' : '') + '">'
 						+ (art ? '<img src="' + art + '" style="width:56px; height:56px; border-radius:6px; object-fit:cover; flex:none;">'
-							: '<div style="width:56px; height:56px; border-radius:6px; background:rgba(128,128,128,0.25); flex:none;"></div>')
+							[%# No artwork - usually a pending DSTM mix trigger that hasn't resolved into real tracks %]
+							[%# yet (e.g. "Nummermix"), rather than a broken cover. A plain generic music-note icon  %]
+							[%# instead of an empty tile, same idea as the native queue's own placeholder icon. %]
+							: '<div style="width:56px; height:56px; border-radius:6px; background:rgba(128,128,128,0.25); flex:none; display:flex; align-items:center; justify-content:center;">'
+								+ '<svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.6;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>')
 						+ '<div style="flex:1; min-width:0;">'
 						+ '<div style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(t.title) + '</div>'
 						+ (t.artist ? '<div style="font-size:0.85em; opacity:0.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + esc(t.artist) + '</div>' : '')
 						+ (albumYear ? '<div style="font-size:0.85em; opacity:0.75; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + albumYear + '</div>' : '')
 						+ '</div>'
 						+ '<div style="flex:none; text-align:right;">'
-						+ (t.duration ? '<div style="font-size:0.85em; opacity:0.7;">' + scDuration(t.duration) + '</div>' : '')
+						[%# A pending DSTM placeholder reports duration "0" - a non-empty string, so always truthy; %]
+						[%# only show the row once there is an actual, positive duration to show. %]
+						+ (parseFloat(t.duration) > 0 ? '<div style="font-size:0.85em; opacity:0.7;">' + scDuration(t.duration) + '</div>' : '')
 						+ '<div style="font-size:0.8em; opacity:0.8; letter-spacing:1px;">' + stars + '</div>'
 						+ '</div>'
 						[%# Move up/down buttons removed, Henk 2026-09-05 - "mogen weg, alleen de       %]
@@ -890,15 +908,12 @@
 	</SCRIPT>
 
 	[%# Track progress bar, Henk's request 2026-09-06 - "een track progressie balkje" on the        %]
-	[%# player bar, visual only (no seek/click-to-jump - Henk's choice, kept simple). A thin strip   %]
-	[%# sitting right above the 64px transport bar rather than overlapping it, so it adds its own    %]
-	[%# small sliver of height instead of eating into the bar's own layout. #scProgressFill's width  %]
-	[%# is only ever set once a second, by scUpdatePlayState above - the CSS transition below is     %]
-	[%# what makes it creep forward smoothly in between those updates instead of visibly jumping.    %]
-	<div id="scProgressTrack" style="position:fixed; left:0; right:0; bottom:64px; height:4px; z-index:1000; background:rgba(128,128,128,0.3);">
-		<div id="scProgressFill" style="height:100%; width:0%; background:var(--text-color, #e0e0e0); transition:width 0.9s linear;"></div>
-	</div>
-
+	[%# player bar, visual only (no seek/click-to-jump - Henk's choice, kept simple).                 %]
+	[%# Elapsed/duration labels, Henk 2026-10-10 - ported from Random Flow's own live.html, flanking %]
+	[%# the bar on the SAME line. MOVED INSIDE the transport bar itself, 2026-10-10 (Henk) - as a     %]
+	[%# separate fixed strip sitting above the transport bar, #sclvbody's reserved bottom padding     %]
+	[%# never quite matched it in every case (last settings row kept peeking out from under it).      %]
+	[%# One bar, one height, one thing for the page's own bottom padding to clear - see below.        %]
 	[%# Fixed transport bar, Henk's request 2026-08-24, reworked 2026-09-05 (ported from the       %]
 	[%# hoofdmap build) to icon-only Previous/Play-Pause/Next, centered and sized to match          %]
 	[%# Material's own bottom player bar height. "Start New Chain" moved out of this bar and onto   %]
@@ -911,9 +926,17 @@
 	[%# the menu button (see that comment for the full reasoning). The left-hand spacer that used to   %]
 	[%# balance it is gone too - back to plain justify-content:center now that nothing else sits in    %]
 	[%# this bar, same as before the Queue button was ever added here on 2026-09-05.                   %]
-	<div style="position:fixed; left:0; right:0; bottom:0; z-index:1000; height:64px; box-sizing:border-box;
+	<div style="position:fixed; left:0; right:0; bottom:0; z-index:1000; height:86px; box-sizing:border-box;
 		background:var(--background-color, #424242); border-top:1px solid var(--list-item-border-color, rgba(255,255,255,0.15));
-		display:flex; align-items:center; justify-content:center; padding:0 8px;">
+		display:flex; flex-direction:column;">
+		<div id="scProgressRow" style="height:20px; flex:none; display:flex; align-items:center; gap:8px; padding:0 8px; box-sizing:border-box;">
+			<span id="scElapsedTime" style="font-size:0.75em; opacity:0.8; flex-shrink:0;">0:00</span>
+			<div id="scProgressTrack" style="flex:1 1 auto; height:4px; background:rgba(128,128,128,0.3);">
+				<div id="scProgressFill" style="height:100%; width:0%; background:var(--text-color, #e0e0e0); transition:width 0.9s linear;"></div>
+			</div>
+			<span id="scDurationTime" style="font-size:0.75em; opacity:0.8; flex-shrink:0;">0:00</span>
+		</div>
+		<div style="flex:1; display:flex; align-items:center; justify-content:center; padding:0 8px; box-sizing:border-box;">
 		<div style="display:flex; align-items:center; justify-content:center; gap:40px;">
 			<button type="button" onclick="scPlayerCmd(['playlist','index','-1'])" class="sc-transport-btn" aria-label="Previous" title="Previous">
 				<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
@@ -925,6 +948,7 @@
 			<button type="button" onclick="scPlayerCmd(['playlist','index','+1'])" class="sc-transport-btn" aria-label="Next" title="Next">
 				<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
 			</button>
+		</div>
 		</div>
 	</div>
 	[%# Grey, matching Material's own chrome instead of an arbitrary colour. --background-color/    %]
@@ -946,9 +970,12 @@
 		[%# on two lines, with the value right-aligned instead of baked into the label line. Width:140px  %]
 		[%# on the label is wide enough for "Artist Spacing" (the longest one here) without wrapping, so  %]
 		[%# every row's control starts at the same x regardless of label length.                          %]
-		.sclv-setting-row { display:flex; align-items:center; gap:10px; margin:0.6em 0; }
+		.sclv-setting-row { display:flex; align-items:center; gap:10px; margin:0.6em 0; max-width:100%; }
 		.sclv-setting-row label { flex:none; width:140px; white-space:nowrap; }
-		.sclv-setting-row select, .sclv-setting-row input[type="range"] { flex:1; }
+		[%# min-width:0 override, Henk 2026-10-10 - without it a flex item never shrinks below its own  %]
+		[%# content width even with flex:1 (default min-width:auto), so a long Recipe/Filter option      %]
+		[%# text was forcing this row, and the whole page, wider than the screen on mobile.              %]
+		.sclv-setting-row select, .sclv-setting-row input[type="range"] { flex:1; min-width:0; }
 		.sclv-setting-value { flex:none; min-width:32px; text-align:right; opacity:0.85; font-size:0.9em; }
 
 		[%# Info-icon/popover widget, matching player.html/quicksettings.html - see scToggleInfo above. %]
@@ -1177,7 +1204,7 @@
 		<div id="sc-queue-list"><div style="padding:12px; opacity:0.7;">Loading...</div></div>
 	</div>
 
-<div id="sclvbody" style="padding-bottom:76px; padding-left:1.5em; padding-right:1.5em;">
+<div id="sclvbody" style="padding-bottom:92px; padding-left:1.5em; padding-right:1.5em;">
 [% END %]
 	[%# sclv-top, Henk 2026-09-05 - "make what's under Last MIP Response scrollable without the    %]
 	[%# top part disappearing". The MusicIP Track Recommendations list below can run to dozens of   %]
@@ -1481,9 +1508,9 @@
 	[%# (Live View's other rows rely on whatever Material's own dialog chrome supplies) - the         %]
 	[%# <summary>'s marker under list-style-position:outside sits right at this element's own edge,   %]
 	[%# so without its own left padding it renders flush against whatever is to its left. Added        %]
-	[%# directly on the <details> itself (15px, matching quicksettings.html's own number) rather       %]
-	[%# than touching sclv-top/sclvbody globally, since nothing else on this page reported the same    %]
-	[%# problem.                                                                                        %]
+	[%# directly on the <details> itself, rather than touching sclv-top/sclvbody globally, since       %]
+	[%# nothing else on this page reported the same problem. Bumped 15px -> 24px, 2026-10-11 (Henk) -   %]
+	[%# same chevron-clip fix already applied in Random Flow.                                           %]
 	[%#                                                                                                 %]
 	[%# RENAMED "Mix Settings", 2026-09-19 (Henk) - the MIPster-style Batch/Chain merge (see             %]
 	[%# Plugin.pm's buildMIPReq comment for the full story): Batch no longer has its own separate       %]
@@ -1493,7 +1520,7 @@
 	[%# alone - only the label text changed (PLUGIN_SC_WEB_QS_CHAINSETTINGS) - renaming those too would %]
 	[%# have been churn for no behavioural gain. Mood moved in here too, in its own small subsection    %]
 	[%# below Variety - see the comment there for why it still gets special treatment.                 %]
-	<details open id="sclvChainSettings" data-scopen="1" ontoggle="scLvDetailsToggle(this, 'sclv_chainsettings_open')" style="padding:8px 15px 4px 15px;">
+	<details open id="sclvChainSettings" data-scopen="1" ontoggle="scLvDetailsToggle(this, 'sclv_chainsettings_open')" style="padding:8px 24px 4px 24px;">
 	<summary style="cursor:pointer; font-weight:bold; padding:6px 0; list-style-position:outside;">[% "PLUGIN_SC_WEB_QS_CHAINSETTINGS" | string %]</summary>
 
 	<div class="sclv-setting-row">

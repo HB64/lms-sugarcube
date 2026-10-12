@@ -42,7 +42,11 @@ my $sc_mipCache = { data => undef, ts => 0 };
 my $sc_mipCacheTTL = 2;
 
 my $sc_mipVersionCache = { data => undef, ts => 0 };
-my $sc_mipVersionCacheTTL = 300;
+# Henk switches between MIP containers while testing - a long TTL here meant the version (and
+# everything derived from it: the 1.8 Runs On field, the Add-folder default) stayed stale for
+# minutes after a switch, surviving even a manual page refresh since this cache is per-process,
+# not per-request. Lowered to match the page's own 4s poll interval.
+my $sc_mipVersionCacheTTL = 5;
 
 # Browser-identifying UA string - MIP's add/refresh endpoints silently no-op for a request
 # that doesn't look like it came from a browser; validate/CPU-use don't seem to care, but this
@@ -72,6 +76,18 @@ sub getMipVersion {
 
 	$sc_mipVersionCache = { data => $version, ts => time() };
 	return $version;
+}
+
+# Add-folder default, version- and OS-aware. 1.8 ships as both a native Linux and a native
+# Windows build (see $ostype, set via the MIP 1.8 Runs On picker); 1.9.x is always the older
+# Windows/Wine image, keeping its original Z: mapping. Falls back to the Wine default when the
+# version can't be read at all, matching the original hardcoded default.
+sub getMipDefaultRoot {
+	my ($version, $ostype) = @_;
+	if ($version && $version =~ /1\.8/) {
+		return ($ostype && $ostype eq 'windows') ? 'C:\Music' : '/music';
+	}
+	return 'Z:\music';
 }
 
 sub getMipCacheStatus {
@@ -191,6 +207,12 @@ sub mipSearch {
 sub handler {
 	 my ( $class, $client, $params ) = @_;
 
+	 # OS type select submits on its own (onchange), independent of the action buttons below - save
+	 # it unconditionally whenever present, rather than fitting it into the elsif chain.
+	 if ( defined $params->{'sc_mip_ostype'} ) {
+		$prefs->set( 'mipostype', $params->{'sc_mip_ostype'} );
+	 }
+
 	 # sc_mip_cpuuse is always present once this form has been posted once (it's a <select>, not an
 	 # optional field) - the Start/Stop buttons must be checked first or they'd never be reached.
 	 if ( $params->{'sc_mip_validate_start'} ) {
@@ -202,8 +224,9 @@ sub handler {
 		$params->{'prefs'}->{'mip_validate_feedback'} = $ok ? 'sent' : 'failed';
 		$sc_mipCache->{ts} = 0;
 	 } elsif ( $params->{'sc_mip_cache_add'} ) {
-		# Disabled field submits nothing when the checkbox is unchecked - default to the standard path.
-		my $root = $params->{'sc_mip_add_root'} || 'Z:\music';
+		# Disabled field submits nothing when the checkbox is unchecked - default to the
+		# version/OS-appropriate path (see getMipDefaultRoot).
+		my $root = $params->{'sc_mip_add_root'} || getMipDefaultRoot(getMipVersion(), $prefs->get('mipostype') || 'linux');
 		my $ok = mipCommand('/server/add', root => $root);
 		$params->{'prefs'}->{'mip_cache_feedback'} = $ok ? 'sent' : 'failed';
 		$sc_mipCache->{ts} = 0;
@@ -236,8 +259,19 @@ sub handler {
 	 $params->{'prefs'}->{'mip_active'} = $mipcache->{active};
 	 $params->{'prefs'}->{'mip_cpuuse'} = $mipcache->{cpuuse};
 	 $params->{'prefs'}->{'mip_reload'} = $mipcache->{reload};
-	 $params->{'prefs'}->{'mip_version'} = getMipVersion();
+	 my $mipVersion = getMipVersion();
+	 $params->{'prefs'}->{'mip_version'} = $mipVersion;
 	 $params->{'prefs'}->{'mip_mixer'} = $mipcache->{mixer};
+	 # 1.8 ships as both a Linux and a Windows build; 1.9.x is Windows-only, so the OS picker only
+	 # makes sense (and is only shown) for 1.8.
+	 $params->{'prefs'}->{'mip_is_18'} = ($mipVersion && $mipVersion =~ /1\.8/) ? 1 : 0;
+	 my $mipOstype = $prefs->get('mipostype') || 'linux';
+	 $params->{'prefs'}->{'mipostype'} = $mipOstype;
+	 my $defaultRoot = getMipDefaultRoot($mipVersion, $mipOstype);
+	 $params->{'prefs'}->{'mip_default_root'} = $defaultRoot;
+	 # Safe to drop into a single-quoted JS string literal (backslash/quote escaped).
+	 (my $jsRoot = $defaultRoot) =~ s/([\\'])/\\$1/g;
+	 $params->{'prefs'}->{'mip_default_root_js'} = $jsRoot;
 
 	 return $class->SUPER::handler( $client, $params );
 }

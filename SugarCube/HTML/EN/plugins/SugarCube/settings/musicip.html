@@ -42,11 +42,11 @@
 		}
 	}
 	// Gates the Add-folder text field behind a checkbox, same pattern as MIP's own index page -
-	// most setups never need a different path than Z:\music.
+	// most setups never need a different path than the version-appropriate default below.
 	function scMipToggleAddRoot(cb) {
 		var f = document.getElementById('sc_mip_add_root');
 		f.disabled = !cb.checked;
-		f.value = cb.checked ? 'Z:\\music' : '';
+		f.value = cb.checked ? '[% prefs.mip_default_root_js %]' : '';
 	}
 	document.addEventListener('click', function(e) {
 		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
@@ -78,7 +78,7 @@
 [%# MIP Cache status, mirrors the "Cache" stats on MIP's own index page. Self-polls below, same %]
 [%# pattern as Live View - subpage switching here is a plain location.href navigation, not an SPA %]
 [%# swap, so a setInterval is torn down cleanly whenever the user leaves this page. %]
-<div id="sc-mip-cache-block" style="padding:4px 0 4px 4px;">
+<div id="sc-mip-cache-block" style="padding:4px 0 4px 4px;" data-mip-active="[% prefs.mip_active %]">
 	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE" | string %]</label>
 	[% IF prefs.mip_version %]
 	<div style="opacity:0.6; font-size:0.8em;">[% prefs.mip_version %]</div>
@@ -125,6 +125,33 @@
 				var dst = document.getElementById(id);
 				if (src && dst) { dst.innerHTML = src.innerHTML; }
 			});
+			// MIP 1.8 Runs On - visibility/selection, skipped while the select itself has focus so an
+			// open dropdown is never yanked out from under the user.
+			var osDst = document.getElementById('sc-mip-ostype-block');
+			var osSelect = document.getElementById('sc_mip_ostype');
+			if (osDst && !(osSelect && document.activeElement === osSelect)) {
+				var osSrc = doc.getElementById('sc-mip-ostype-block');
+				if (osSrc) { osDst.innerHTML = osSrc.innerHTML; }
+			}
+			// Add-folder default path - plain text/attribute updates, never touch the typed-in value.
+			var rootLabelSrc = doc.getElementById('sc-mip-default-root-label');
+			var rootLabelDst = document.getElementById('sc-mip-default-root-label');
+			if (rootLabelSrc && rootLabelDst) { rootLabelDst.textContent = rootLabelSrc.textContent; }
+			var rootInputSrc = doc.getElementById('sc_mip_add_root');
+			var rootInputDst = document.getElementById('sc_mip_add_root');
+			if (rootInputSrc && rootInputDst) { rootInputDst.placeholder = rootInputSrc.placeholder; }
+			// Cache actions - show/hide only (never innerHTML) so a checkbox/typed path in progress is
+			// never disturbed, just display:none toggled the moment MIP becomes un/reachable.
+			var cacheBlockSrc = doc.getElementById('sc-mip-cache-block');
+			var cacheBlockDst = document.getElementById('sc-mip-cache-block');
+			if (cacheBlockSrc && cacheBlockDst) {
+				var mipActive = cacheBlockSrc.getAttribute('data-mip-active');
+				cacheBlockDst.setAttribute('data-mip-active', mipActive);
+				var actionsDst = document.getElementById('sc-mip-cache-actions');
+				if (actionsDst) { actionsDst.style.display = (mipActive === 'Unreachable') ? 'none' : ''; }
+				var validateDst = document.getElementById('sc-mip-validate-actions');
+				if (validateDst) { validateDst.style.display = (mipActive === 'Unreachable') ? 'none' : ''; }
+			}
 		};
 		r.send();
 	}
@@ -132,16 +159,33 @@
 })();
 </script>
 
+[%# MIP 1.8 exists as both a Linux and Windows build with no way to tell them apart from the      %]
+[%# version string alone - only shown when 1.8 is detected (1.9 is always Windows). Kept in its own %]
+[%# #sc-mip-ostype-block div (outside #sc-mip-cache-block), so the poll script below can refresh     %]
+[%# its visibility/selection on its own, without ever touching the Cache actions inputs next to it. %]
+<div id="sc-mip-ostype-block">
+[% IF prefs.mip_is_18 %]
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPCACHE_OSTYPE" desc="PLUGIN_SC_WEB_MIPCACHE_OSTYPEDESC" %]
+	<select class="stdedit" name="sc_mip_ostype" id="sc_mip_ostype" onchange="this.form.submit()">
+		<option value="linux" [% 'selected' IF prefs.mipostype != 'windows' %]>[% "PLUGIN_SC_WEB_MIPCACHE_OSTYPE_LINUX" | string %]</option>
+		<option value="windows" [% 'selected' IF prefs.mipostype == 'windows' %]>[% "PLUGIN_SC_WEB_MIPCACHE_OSTYPE_WINDOWS" | string %]</option>
+	</select>
+[% END %]
+[% END %]
+</div>
+
 [%# Cache actions - same three requests MIP's own page offers. Not inside #sc-mip-cache-block, so %]
-[%# the live poll above never wipes out whatever the user is typing here. %]
-<div style="padding:4px 0 4px 4px;">
+[%# the live poll above never wipes out whatever the user is typing here - only its display style   %]
+[%# gets toggled (never its innerHTML), so an in-progress checkbox/typed path survives a poll tick.  %]
+[%# Hidden while MIP can't be reached - none of these actions mean anything without a live MIP.      %]
+<div id="sc-mip-cache-actions" style="padding:4px 0 4px 4px;[% ' display:none;' IF prefs.mip_active == 'Unreachable' %]">
 	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE_ACTIONS" | string %]</label>
 	<br>
 	[% UNLESS prefs.mip_mixer %]
 	<input type="checkbox" id="sc_mip_add_differs" onchange="scMipToggleAddRoot(this)">
-	<label for="sc_mip_add_differs">[% "PLUGIN_SC_WEB_MIPCACHE_ADD_DIFFERS" | string %]</label>
+	<label for="sc_mip_add_differs">[% "PLUGIN_SC_WEB_MIPCACHE_ADD_DIFFERS" | string %] <span id="sc-mip-default-root-label">[% prefs.mip_default_root %]</span></label>
 	<br>
-	<input type="text" class="stdedit" id="sc_mip_add_root" name="sc_mip_add_root" placeholder="Z:\music" size="30" disabled>
+	<input type="text" class="stdedit" id="sc_mip_add_root" name="sc_mip_add_root" placeholder="[% prefs.mip_default_root %]" size="30" disabled>
 	<input type="submit" class="stdclick" name="sc_mip_cache_add" value="[% "PLUGIN_SC_WEB_MIPCACHE_ADD" | string %]">
 	<br><br>
 	<input type="text" class="stdedit" name="sc_mip_search_query" value="[% prefs.mip_search_query %]" placeholder="Artist, title, album..." size="30">
@@ -172,8 +216,9 @@
 </div>
 
 [%# Validation - CPU use posts to MIP immediately on change; Start/Stop act without touching any SC pref. %]
+[%# Hidden (display only, same reasoning/pattern as Cache actions) while MIP can't be reached. %]
 [% UNLESS prefs.mip_mixer %]
-<div style="padding:4px 0 4px 4px;">
+<div id="sc-mip-validate-actions" style="padding:4px 0 4px 4px;[% ' display:none;' IF prefs.mip_active == 'Unreachable' %]">
 	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPVALIDATE" | string %]</label>
 	<br>
 	<select class="stdedit" name="sc_mip_cpuuse" onchange="this.form.submit()">

@@ -5,7 +5,7 @@ PLUGIN_SUGARCUBE_DESCINSTALL
 PLUGIN_SC_SUBPAGE
 	EN	Settings Section
 PLUGIN_SC_SUBPAGEDESC
-	EN	Select a settings section
+	EN	Switch between SugarCube's settings pages. This does not save the page you're currently viewing - if you've made changes there, click that page's own Save button first, or they'll be lost when you switch.
 PLUGIN_SC_SUBPAGE_MAIN
 	EN	Main
 PLUGIN_SC_WEB_MAIN_HOST
@@ -76,6 +76,14 @@ PLUGIN_SC_MAIN_PORT
 	EN	MusicIP Port
 PLUGIN_SC_MAIN_PORTDESC
 	EN	MusicIP Port (Default 10002)
+PLUGIN_SC_WEB_MIPCACHE_OSTYPE
+	EN	MIP 1.8 Runs On
+PLUGIN_SC_WEB_MIPCACHE_OSTYPEDESC
+	EN	MIP 1.8 exists as both a Linux and a Windows build, and SugarCube can't tell them apart automatically. Select which one you're running so the Add-folder default below uses the right path style.
+PLUGIN_SC_WEB_MIPCACHE_OSTYPE_LINUX
+	EN	Linux
+PLUGIN_SC_WEB_MIPCACHE_OSTYPE_WINDOWS
+	EN	Windows
 PLUGIN_SC_WEB_MIPCACHE
 	EN	MusicIP Cache
 PLUGIN_SC_WEB_MIPCACHE_TOTAL
@@ -111,7 +119,7 @@ PLUGIN_SC_WEB_MIPCACHE_RELOAD
 PLUGIN_SC_WEB_MIPCACHE_ADD
 	EN	Add music
 PLUGIN_SC_WEB_MIPCACHE_ADD_DIFFERS
-	EN	Music folder differs from Z:\music
+	EN	Music folder differs from
 PLUGIN_SC_WEB_MIPCACHE_SEARCH
 	EN	Search songs
 PLUGIN_SC_WEB_MIPCACHE_REFRESH
@@ -200,6 +208,8 @@ PLUGIN_SC_POPUP_NOTRACKS
 	EN	MusicIP returned nothing
 PLUGIN_SC_POPUP_BREACHED
 	EN	SC BLOCK BREACH!
+PLUGIN_SC_POPUP_DSTM_QUEUE
+	EN	SugarCube is Enabled, but there are too many tracks queued to respect Mix Settings
 PLUGIN_SC_POPUP_ALBUMQUEUED
 	EN	Album Queued
 PLUGIN_SC_POPUP_REPLACINGTRACK
