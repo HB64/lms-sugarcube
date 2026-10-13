@@ -41,20 +41,23 @@
 			pop.style.left = shift + 'px';
 		}
 	}
-	// Gates the Add-folder text field behind a checkbox, same pattern as MIP's own index page -
-	// most setups never need a different path than the version-appropriate default below.
-	function scMipToggleAddRoot(cb) {
-		var f = document.getElementById('sc_mip_add_root');
-		f.disabled = !cb.checked;
-		f.value = cb.checked ? '[% prefs.mip_default_root_js %]' : '';
-	}
 	document.addEventListener('click', function(e) {
 		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
 			if (p.style.display === 'block' && !p.closest('.sc-info-wrap').contains(e.target)) {
 				p.style.display = 'none';
 			}
 		});
+		// Search result box - same outside-click-closes pattern as the info popovers above, plus its
+		// own X button (see scCloseSearchResult).
+		var box = document.getElementById('sc-mip-search-result-box');
+		if (box && box.style.display !== 'none' && !box.contains(e.target) && e.target.id !== 'sc_mip_cache_search') {
+			box.style.display = 'none';
+		}
 	});
+	function scCloseSearchResult() {
+		var box = document.getElementById('sc-mip-search-result-box');
+		if (box) { box.style.display = 'none'; }
+	}
 </script>
 
 [% BLOCK scinfosetting %]
@@ -137,9 +140,6 @@
 			var rootLabelSrc = doc.getElementById('sc-mip-default-root-label');
 			var rootLabelDst = document.getElementById('sc-mip-default-root-label');
 			if (rootLabelSrc && rootLabelDst) { rootLabelDst.textContent = rootLabelSrc.textContent; }
-			var rootInputSrc = doc.getElementById('sc_mip_add_root');
-			var rootInputDst = document.getElementById('sc_mip_add_root');
-			if (rootInputSrc && rootInputDst) { rootInputDst.placeholder = rootInputSrc.placeholder; }
 			// Cache actions - show/hide only (never innerHTML) so a checkbox/typed path in progress is
 			// never disturbed, just display:none toggled the moment MIP becomes un/reachable.
 			var cacheBlockSrc = doc.getElementById('sc-mip-cache-block');
@@ -180,15 +180,12 @@
 [%# Hidden while MIP can't be reached - none of these actions mean anything without a live MIP.      %]
 <div id="sc-mip-cache-actions" style="padding:4px 0 4px 4px;[% ' display:none;' IF prefs.mip_active == 'Unreachable' %]">
 	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE_ACTIONS" | string %]</label>
-	<br>
+	<br><br>
 	[% UNLESS prefs.mip_mixer %]
-	<input type="checkbox" id="sc_mip_add_differs" onchange="scMipToggleAddRoot(this)">
-	<label for="sc_mip_add_differs">[% "PLUGIN_SC_WEB_MIPCACHE_ADD_DIFFERS" | string %] <span id="sc-mip-default-root-label">[% prefs.mip_default_root %]</span></label>
-	<br>
-	<input type="text" class="stdedit" id="sc_mip_add_root" name="sc_mip_add_root" placeholder="[% prefs.mip_default_root %]" size="30" disabled>
+	<label style="opacity:0.8;">[% "PLUGIN_SC_WEB_MIPCACHE_ADD_FROM" | string %] <span id="sc-mip-default-root-label">[% prefs.mip_default_root %]</span></label>
 	<input type="submit" class="stdclick" name="sc_mip_cache_add" value="[% "PLUGIN_SC_WEB_MIPCACHE_ADD" | string %]">
 	<br><br>
-	<input type="text" class="stdedit" name="sc_mip_search_query" value="[% prefs.mip_search_query %]" placeholder="Artist, title, album..." size="30">
+	<input type="text" class="stdedit" name="sc_mip_search_query" value="[% prefs.mip_search_query %]" placeholder="Artist, title, album..." size="18">
 	<input type="submit" class="stdclick" name="sc_mip_cache_search" value="[% "PLUGIN_SC_WEB_MIPCACHE_SEARCH" | string %]">
 	<br><br>
 	[% END %]
@@ -208,8 +205,9 @@
 	</div>
 
 	[% IF prefs.mip_search_result %]
-	<div style="margin-top:10px;">
+	<div id="sc-mip-search-result-box" style="margin-top:10px;">
 		<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE_SEARCH_RESULT" | string %]</label>
+		<span class="sc-info-icon" onclick="scCloseSearchResult()" style="float:right; cursor:pointer;" title="[% "PLUGIN_SC_WEB_CLOSE" | string %]">&#10005;</span>
 		<pre style="white-space:pre-wrap; background:#1a1a1a; padding:8px; border-radius:6px; max-height:300px; overflow:auto; font-size:0.85em;">[% prefs.mip_search_result | html %]</pre>
 	</div>
 	[% END %]

@@ -78,16 +78,10 @@ sub getMipVersion {
 	return $version;
 }
 
-# Add-folder default, version- and OS-aware. 1.8 ships as both a native Linux and a native
-# Windows build (see $ostype, set via the MIP 1.8 Runs On picker); 1.9.x is always the older
-# Windows/Wine image, keeping its original Z: mapping. Falls back to the Wine default when the
-# version can't be read at all, matching the original hardcoded default.
+# Add-folder default: the configured "Music Path in MusicIP" (nasconvertpath), falling back to
+# "Music Path in LMS" (localmediapath) when that's empty - same rule the path translation uses.
 sub getMipDefaultRoot {
-	my ($version, $ostype) = @_;
-	if ($version && $version =~ /1\.8/) {
-		return ($ostype && $ostype eq 'windows') ? 'C:\Music' : '/music';
-	}
-	return 'Z:\music';
+	return $prefs->get('nasconvertpath') || $prefs->get('localmediapath') || '';
 }
 
 sub getMipCacheStatus {
@@ -101,8 +95,9 @@ sub getMipCacheStatus {
 	my $sugarport = $prefs->get('sugarport');
 	my $ua = _mipUA(2);
 	my $http = $ua->get("http://$miphosturl:$sugarport/server");
+	my $hadServer = ($http && $http->is_success) ? 1 : 0;
 
-	if ($http && $http->is_success) {
+	if ($hadServer) {
 		my $body = $http->content;
 		if ($body =~ /id="st-total"[^>]*>([^<]*)</)   { $status->{total}   = $1; }
 		if ($body =~ /id="st-mixable"[^>]*>([^<]*)</) { $status->{mixable} = $1; }
@@ -127,15 +122,44 @@ sub getMipCacheStatus {
 		# present in the markup - strip comments first so that example is never mistaken for the real one.
 		(my $bodyNoComments = $body) =~ s/<!--.*?-->//gs;
 		if ($bodyNoComments =~ /class="reload-notice"/) { $status->{reload} = 1; }
-	} else {
-		# No /server page: MusicMagicMixer.exe. Only the API is available - total songs and status.
+
+		# Some companion pages show these same numbers in plain label+value cards instead of using
+		# SugarCube's ids ("stat-label">Mixable</div> ... "stat-value">1234</div>") - try that layout
+		# for whichever counts the id-based match above didn't find.
+		my %labelFor = (total => 'Total songs', mixable => 'Mixable', todo => 'To validate');
+		for my $key (qw(total mixable todo)) {
+			next if $status->{$key} ne '?';
+			my $label = quotemeta($labelFor{$key});
+			if ($body =~ /class="stat-label">$label<\/div>\s*<div class="stat-value[^"]*">([^<]*)</) {
+				$status->{$key} = $1;
+			}
+		}
+		# This kind of page rarely has a separate status text - if we got real numbers but no active
+		# text, the server clearly answered, so call it Active rather than the default Unreachable.
+		if ($status->{total} ne '?' && $status->{active} eq 'Unreachable') {
+			$status->{active} = 'Active';
+		}
+	}
+
+	# No matching ids found above - either /server failed outright, or it answered with a
+	# companion page that doesn't use SugarCube's expected markup (every custom front-end is
+	# different, and most MIP installs won't have one that matches at all). Fall back to MIP's
+	# own universal API, which every install exposes regardless of what (if anything) serves
+	# /server - degrades to total count + a plain "Active", no mixable/todo breakdown, but no
+	# longer stuck on the default "Unreachable" just because the page looked different.
+	if ($status->{total} eq '?') {
+		# Reuse the same universal API fallback for both cases, but only mark this a bare
+		# MusicMagicMixer.exe (mixer=1, hides Add/Search/Validate, routes Refresh through the
+		# sidecar) when /server genuinely doesn't exist - not when it exists but just doesn't use
+		# SugarCube's expected markup. A /server that responds still supports the normal
+		# /server/add, /server/search, /server/refresh actions regardless of its page design.
 		my $cnt = _mipUA(2)->get("http://$miphosturl:$sugarport/api/getSongCount");
 		if ($cnt && $cnt->is_success && $cnt->content =~ /(\d+)/) {
 			$status->{total}   = $1;
 			$status->{mixable} = 'n/a';
 			$status->{todo}    = 'n/a';
 			$status->{active}  = 'Active';
-			$status->{mixer}   = 1;
+			$status->{mixer}   = $hadServer ? 0 : 1;
 		}
 	}
 
@@ -224,9 +248,7 @@ sub handler {
 		$params->{'prefs'}->{'mip_validate_feedback'} = $ok ? 'sent' : 'failed';
 		$sc_mipCache->{ts} = 0;
 	 } elsif ( $params->{'sc_mip_cache_add'} ) {
-		# Disabled field submits nothing when the checkbox is unchecked - default to the
-		# version/OS-appropriate path (see getMipDefaultRoot).
-		my $root = $params->{'sc_mip_add_root'} || getMipDefaultRoot(getMipVersion(), $prefs->get('mipostype') || 'linux');
+		my $root = getMipDefaultRoot();
 		my $ok = mipCommand('/server/add', root => $root);
 		$params->{'prefs'}->{'mip_cache_feedback'} = $ok ? 'sent' : 'failed';
 		$sc_mipCache->{ts} = 0;
@@ -267,11 +289,7 @@ sub handler {
 	 $params->{'prefs'}->{'mip_is_18'} = ($mipVersion && $mipVersion =~ /1\.8/) ? 1 : 0;
 	 my $mipOstype = $prefs->get('mipostype') || 'linux';
 	 $params->{'prefs'}->{'mipostype'} = $mipOstype;
-	 my $defaultRoot = getMipDefaultRoot($mipVersion, $mipOstype);
-	 $params->{'prefs'}->{'mip_default_root'} = $defaultRoot;
-	 # Safe to drop into a single-quoted JS string literal (backslash/quote escaped).
-	 (my $jsRoot = $defaultRoot) =~ s/([\\'])/\\$1/g;
-	 $params->{'prefs'}->{'mip_default_root_js'} = $jsRoot;
+	 $params->{'prefs'}->{'mip_default_root'} = getMipDefaultRoot();
 
 	 return $class->SUPER::handler( $client, $params );
 }
