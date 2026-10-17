@@ -990,11 +990,11 @@
 		[%# on the label is wide enough for "Artist Spacing" (the longest one here) without wrapping, so  %]
 		[%# every row's control starts at the same x regardless of label length.                          %]
 		.sclv-setting-row { display:flex; align-items:center; gap:10px; margin:0.6em 0; max-width:100%; }
-		.sclv-setting-row label { flex:none; width:140px; white-space:nowrap; }
+		.sclv-setting-row label { flex:none; width:8.5em; white-space:nowrap; }
 		[%# min-width:0 override, Henk 2026-10-10 - without it a flex item never shrinks below its own  %]
 		[%# content width even with flex:1 (default min-width:auto), so a long Recipe/Filter option      %]
 		[%# text was forcing this row, and the whole page, wider than the screen on mobile.              %]
-		.sclv-setting-row select, .sclv-setting-row input[type="range"] { flex:1; min-width:0; }
+		.sclv-setting-row select, .sclv-setting-row input[type="range"] { flex:1; width:0; min-width:0; }
 		/* Lyrion swaps each select for a div widget (custom-select-container); the rule above never reaches it, so it sized itself to its longest option and widened the page on a phone. */
 		.sclv-setting-row .custom-select-container { flex:1; min-width:0; }
 		.sclv-setting-row .custom-select-opener { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -1121,6 +1121,20 @@
 			text-decoration: none;
 		}
 		.sclv-menu-dropdown a:hover, .sclv-menu-dropdown a:active { background: rgba(128,128,128,0.15); }
+
+		[%# Henk, 2026-10-17 - "dat meekleuren ziet er niet uit": a bare <select>'s open dropdown     %]
+		[%# otherwise highlights the hovered/selected row with the system/browser accent color,        %]
+		[%# which can clash badly with this page's own colors. Fixed, readable colors instead.        %]
+		select.stdedit {
+			color-scheme: dark;
+			background-color: var(--background-color, #fff);
+			color: var(--text-color, #333);
+			border-color: var(--list-item-border-color, rgba(128,128,128,0.3)) !important;
+		}
+		select.stdedit option:checked, select.stdedit option:hover {
+			background-color: var(--list-item-border-color, rgba(128,128,128,0.3)) !important;
+			color: var(--text-color, #333) !important;
+		}
 
 		[%# Henk, 2026-10-17 - popup like the Queue panel instead of a full-height overlay, same as   %]
 		[%# every other plugin's menu/history view. Position (top/left) and max-height are computed     %]
@@ -1305,6 +1319,10 @@
 			<div id="sclvMenuDropdown" class="sclv-menu-dropdown">
 				<a href="#" onclick="scLvPanelOpen('mip');return false;">MIP Response</a>
 				<a href="#" onclick="scLvPanelOpen('history');return false;">History</a>
+				[%# Power Search, ported from MIPster 2026-10-17 - a plain navigation link (it is a    %]
+				[%# whole save-and-test form, not a small popup), same as every other SugarCube page.  %]
+				[%# Offered only where the MIP host can do it (sclv_pscap_ok, see Plugin.pm).           %]
+				[% IF sclv_pscap_ok %]<a href="[% webroot %]plugins/SugarCube/settings/powersearch.html?player=[% player | uri %]">[% "PLUGIN_SC_PS_BUTTON" | string %]</a>[% END %]
 			</div>
 		</div>
 
@@ -1519,7 +1537,7 @@
 	[%# alone - only the label text changed (PLUGIN_SC_WEB_QS_CHAINSETTINGS) - renaming those too would %]
 	[%# have been churn for no behavioural gain. Mood moved in here too, in its own small subsection    %]
 	[%# below Variety - see the comment there for why it still gets special treatment.                 %]
-	<details open id="sclvChainSettings" data-scopen="1" ontoggle="scLvDetailsToggle(this, 'sclv_chainsettings_open')" style="padding:8px 24px 4px 24px;">
+	<details open id="sclvChainSettings" data-scopen="1" ontoggle="scLvDetailsToggle(this, 'sclv_chainsettings_open')" style="padding:8px 0 4px 0;">
 	<summary style="cursor:pointer; font-weight:bold; padding:6px 0; list-style-position:outside;">[% "PLUGIN_SC_WEB_QS_CHAINSETTINGS" | string %]</summary>
 
 	<div class="sclv-setting-row">

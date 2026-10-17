@@ -28,6 +28,7 @@ use Plugins::SugarCube::SettingsExports;
 use Plugins::SugarCube::SettingsMusicIP;
 use Plugins::SugarCube::Breakout;
 use Plugins::SugarCube::ProtocolHandler;
+use Plugins::SugarCube::PowerSearch;
 use Scalar::Util qw(blessed);
 use Slim::Utils::Timers;
 use URI::Escape;
@@ -45,6 +46,7 @@ my $htmlTemplateLV = 'plugins/SugarCube/settings/liveview.html';
 # quicksettings.html is retired - Live View's Mix/Mood Settings collapsibles cover everything this
 # page did, and jiveSugarCubeSetting above already saves every pref it used to.
 my $htmlTemplateQP = 'plugins/SugarCube/settings/quickplay.html';
+my $htmlPowerSearch = 'plugins/SugarCube/settings/powersearch.html';
 my $global_quickmix = 0; # if quick fire mix from currently playing selected
 my $mixstatus = ''; # Holds status of MusicIP service
 my $apc_enabled;
@@ -1164,17 +1166,18 @@ sub filter_filter {
 	my $request = shift;
 	my $client = $request->client();
 	my $l_filters = Plugins::SugarCube::PlayerSettings::getFilterList($client);
-	my @listRef = ();
-	foreach my $filter (sort keys %$l_filters) {
-		push @listRef, $l_filters->{$filter};
-	}
 
 	my $activefilter = $prefs->client($client)->get('sugarcube_filteractive') || '';
 
 	my @filtermenu = ();
 	my $val;
-	foreach my $filter (@listRef) {
-		if ($filter eq $activefilter) {
+	# Henk, 2026-10-17 - for every normal filter the hash key and text are the same string, but
+	# Power Search's key (internal, never shown) differs from its text (the label), so the web
+	# <select> can save either form. Match on both, or a Power Search pick made on the web shows
+	# up here with no text selected.
+	foreach my $key (sort keys %$l_filters) {
+		my $filter = $l_filters->{$key};
+		if ($filter eq $activefilter || $key eq $activefilter) {
 			$val = 1;
 		} else {
 			$val = 0;
@@ -3101,6 +3104,16 @@ sub buildMIPReq {
 
 		if ($sugarcube_activefilter eq '0') {
 			$log->debug("Filter is set to NONE\n");
+		} elsif (Plugins::SugarCube::PowerSearch::isPowerSearch($sugarcube_activefilter)) {
+			# MusicIP has ONE filter slot and the last one in the url wins, so the expression goes
+			# in exactly where a named filter would - ported from MIPster 2026-10-17.
+			my $expr = Plugins::SugarCube::PowerSearch::activeExpression($client);
+			if (defined $expr) {
+				$mypageurl = $mypageurl . '&filter=' . Plugins::SugarCube::PowerSearch::escapeExpression($expr);
+				$log->debug("Filter is the saved Power Search;$expr\n");
+			} else {
+				$log->debug("Power Search selected but no usable expression - filter is NONE\n");
+			}
 		} else {
 			$mypageurl = $mypageurl . '&filter=' . escapeFilterName($sugarcube_activefilter);
 		}
@@ -3842,6 +3855,11 @@ sub webPages {
 	Slim::Web::Pages->addPageFunction ("$urlBase/scbatch.html", \&scBatchWeb);
 	Slim::Web::HTTP::CSRF->protectURI("$urlBase/scbatch.html");
 
+	# Power Search, ported from MIPster 2026-10-17. No addPageLinks - reached from the Live View
+	# menu and nowhere else, same as MIPster's own placement.
+	Slim::Web::Pages->addPageFunction ("$urlBase/powersearch.html", \&handleWebPowerSearch);
+	Slim::Web::HTTP::CSRF->protectURI("$urlBase/powersearch.html");
+
 	if (UNIVERSAL::can ("Slim::Plugin::Base", "addWeight")) {
 		###
 		# 84 and 83 were the stored values on every install here; they are now fixed. The slider that
@@ -3863,6 +3881,82 @@ sub webPages {
 # jiveSugarCubeSetting (same pref set, same replace semantics) and Live View's own always-visible
 # Play/Add Mood Batch buttons; Replace Queue was already a Controls-page button pointing at
 # quickplay.html/handleWebQP, not something unique to this page.
+
+# Power Search, ported from MIPster 2026-10-17 (PowerSearch.pm has the full design notes - field
+# table, expression grammar, capability/yield tests). This handler only drives the page: it never
+# builds a clause itself.
+#
+# A SAVE THAT FAILS ITS YIELD TEST STORES NOTHING. The last passing search stays in force, and the
+# page comes back showing it - the typing that failed is discarded, by design.
+sub handleWebPowerSearch {
+	my ($client, $params) = @_;
+	$client = Slim::Player::Client::getClient ($params->{player});
+	return unless $client;
+
+	$params->{pscap} = Plugins::SugarCube::PowerSearch::hostCapability(1);
+	$params->{playername} = $client->name;
+
+	if ($params->{pscap} ne 'ok') {
+		return Slim::Web::HTTP::filltemplatefile ($htmlPowerSearch, $params);
+	}
+
+	my $typed;   # what was sent, kept on screen when the save is refused
+
+	if ($params->{pssave}) {
+		my $search = Plugins::SugarCube::PowerSearch::parseData ($params->{psdata});
+		$typed = $search;
+		my $bad = Plugins::SugarCube::PowerSearch::badCharacter ($search);
+		my $expr = Plugins::SugarCube::PowerSearch::buildExpression ($search);
+
+		if (defined $bad) {
+			$params->{psmessage} = sprintf (Slim::Utils::Strings::string('PLUGIN_SC_PS_BADCHAR'), $bad);
+		} elsif (!defined $expr) {
+			$params->{psmessage} = Slim::Utils::Strings::string('PLUGIN_SC_PS_EMPTY');
+		} else {
+			my ($found, $how) = Plugins::SugarCube::PowerSearch::yieldTest ($expr, $search->{min});
+			if ($how ne 'ok') {
+				$params->{psmessage} = Slim::Utils::Strings::string('PLUGIN_SC_PS_NOANSWER');
+			} elsif ($found == 0) {
+				$params->{psmessage} = Slim::Utils::Strings::string('PLUGIN_SC_PS_NOMATCH');
+			} elsif ($found < $search->{min}) {
+				$params->{psmessage} = sprintf (Slim::Utils::Strings::string('PLUGIN_SC_PS_SHORT'),
+					$search->{min}, $found);
+			} else {
+				Plugins::SugarCube::PowerSearch::saveSearch ($client, $search);
+				$params->{psmessage} = Slim::Utils::Strings::string('PLUGIN_SC_PS_SAVED');
+				$params->{psgood} = 1;
+				$typed = undef;
+				$log->info("Power Search saved for " . $client->name . ";$expr");
+			}
+		}
+	}
+
+	# WHAT THE PAGE COMES BACK SHOWING. A refused save keeps what was typed, so one bad row can be
+	# corrected instead of costing the whole search. A save that passed, and a plain visit, both
+	# show what is stored.
+	my $show = $typed || Plugins::SugarCube::PowerSearch::savedSearch ($client);
+	$params->{psdata} = $show ? Plugins::SugarCube::PowerSearch::toData ($show) : '';
+	$params->{psmin}   = $show ? $show->{min} : Plugins::SugarCube::PowerSearch::minStart();
+	$params->{psfloor} = Plugins::SugarCube::PowerSearch::minFloor();
+	$params->{psstart} = Plugins::SugarCube::PowerSearch::minStart();
+
+	my @fields;
+	foreach my $f (@{ Plugins::SugarCube::PowerSearch::fields() }) {
+		my $hint = '';
+		$hint = 'mm/dd/yyyy' if $f->{kind} eq 'date';
+		$hint = 'yyyy' if $f->{id} eq 'year';
+		$hint = '0-5'  if $f->{id} eq 'rating';
+		push @fields, {
+			id    => $f->{id},
+			kind  => $f->{kind},
+			hint  => $hint,
+			label => Slim::Utils::Strings::string($f->{label}),
+		};
+	}
+	$params->{psfields} = \@fields;
+
+	return Slim::Web::HTTP::filltemplatefile ($htmlPowerSearch, $params);
+}
 
 # Replace Next Track, from the Home page. Deliberately NOT on the player settings page: that page
 # is save-then-apply and carries "copy settings to other players" at the bottom, so an action that
@@ -3978,8 +4072,11 @@ sub handleWebList {
 		# merge (after the sc_on toggle above): Filter, Recipe, Reject Size, Style, Variety, ported
 		# from quicksettings.html's own collapsible "Chain Settings" <details> section.
 		###
-		$params->{'sclv_filters'} = Plugins::SugarCube::PlayerSettings::getFilterList();
+		$params->{'sclv_filters'} = Plugins::SugarCube::PlayerSettings::getFilterList($client);
 		$params->{'sclv_receipes'} = Plugins::SugarCube::PlayerSettings::getReceipesList();
+		# Power Search's Live View menu entry is offered only where the host can do it (cached
+		# answer, no extra request) - ported from MIPster 2026-10-17.
+		$params->{'sclv_pscap_ok'} = (Plugins::SugarCube::PowerSearch::hostCapability() eq 'ok') ? 1 : 0;
 		# sugarcube_size joined this list 2026-09-19, for Mix Settings' new MIP Ask Size slider -
 		# the first place this pref has ever been adjustable from Live View rather than only from
 		# player.html. sugarcube_lv_moodsettings_open (the old separate "Mood Batch Settings"

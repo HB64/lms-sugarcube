@@ -12,6 +12,7 @@ use base qw(Slim::Web::Settings);
 use Slim::Utils::Prefs;
 use Slim::Utils::Log;
 use LWP::UserAgent;
+use Plugins::SugarCube::PowerSearch;
 
 my $prefs = preferences('plugin.SugarCube');
 my $log = logger('plugin.sugarcube');
@@ -281,7 +282,7 @@ sub handler {
 	$params->{'prefs'}->{'sclessartist_list'} = $prefs->client($client)->get('sclessartist_list');
 	$params->{'prefs'}->{'sclessartist_weight'} = $prefs->client($client)->get('sclessartist_weight') // 1;
 
-	$params->{'filters'} = getFilterList();
+	$params->{'filters'} = getFilterList($client);
 	$params->{'receipes'} = getReceipesList();
 	$params->{'moods'} = getMoodsList();
 	$params->{'sc_players'} = getPlayerList($client);
@@ -307,10 +308,29 @@ sub getPlayerList {
 ###
 # FILTERS
 sub getFilterList {
+	my $client = shift;
+
+	my $filterHash;
 	if ($sc_listCache{filters}{data} && (time() - $sc_listCache{filters}{ts} < $sc_listCacheTTL)) {
-		return $sc_listCache{filters}{data};
+		# Shallow copy - Power Search below is per-client, so the shared cached hash must never be
+		# mutated directly (that would leak one player's entry into every other player's list).
+		$filterHash = { %{ $sc_listCache{filters}{data} } };
+	} else {
+		$filterHash = _fetchFilterList();
 	}
 
+	# Power Search, ported from MIPster 2026-10-17 - offered only where a search is actually saved
+	# for this player and the host can do it (cached answer, no extra request).
+	if ($client && Plugins::SugarCube::PowerSearch::savedSearch($client)
+		&& Plugins::SugarCube::PowerSearch::hostCapability() eq 'ok')
+	{
+		$filterHash->{ Plugins::SugarCube::PowerSearch::psKey() } = Plugins::SugarCube::PowerSearch::psLabel();
+	}
+
+	return $filterHash;
+}
+
+sub _fetchFilterList {
 	my @filters = ();
 	my %filterHash = ();
 

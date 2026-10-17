@@ -424,3 +424,88 @@ PLUGIN_SC_WEB_MIPREFRESHPORT
 	EN	Refresh Sidecar Port
 PLUGIN_SC_WEB_MIPREFRESHPORTDESC
 	EN	Port of the refresh sidecar that restarts the Mixer after a library change - needed with a bare Mixer (no Server) to refresh it at all, and useful in a combined setup to keep the Mixer in sync with the Server. Leave empty to disable.
+
+PLUGIN_SC_PS_TITLE
+	EN	MIP Power Search
+PLUGIN_SC_PS_BUTTON
+	EN	MIP Power Search
+PLUGIN_SC_PS_DROPDOWN
+	EN	Power Search
+PLUGIN_SC_PS_NOHOST
+	EN	No MusicIP host found
+PLUGIN_SC_PS_HEADLESS
+	EN	Power search failed. Requires desktop style host
+PLUGIN_SC_PS_HELP
+	EN	Text fields are case insensitive and match part of a word, so beat will find the Beatles and any artist with the word Beats. MIP replaces empty genre fields with "Miscellaneous" and empty Artist fields with "Various Artists". If these are in your actual tags, they will count towards a "missing" field. Use a separate parameter set connected by an "and" when just an All or Any in one set is insufficient to capture your exact need.
+PLUGIN_SC_PS_MATCH
+	EN	Match
+PLUGIN_SC_PS_MATCHAND
+	EN	and match
+PLUGIN_SC_PS_OFFOLLOWING
+	EN	of the following
+PLUGIN_SC_PS_ALL
+	EN	all
+PLUGIN_SC_PS_ANY
+	EN	any
+PLUGIN_SC_PS_ADDROW
+	EN	Add Condition
+PLUGIN_SC_PS_ADDSET
+	EN	More Params
+PLUGIN_SC_PS_MIN
+	EN	Min
+PLUGIN_SC_PS_MINHELP
+	EN	A low yield search is worthless for a mix. Set a minimum for yourself. A search yielding less than the set minimum will be rejected. Everything above 500 is accepted.
+PLUGIN_SC_PS_SAVE
+	EN	Save Search
+PLUGIN_SC_PS_RESET
+	EN	Reset
+PLUGIN_SC_PS_SAVED
+	EN	Search saved
+PLUGIN_SC_PS_SHORT
+	EN	Leaves less than %s - found %s
+PLUGIN_SC_PS_NOMATCH
+	EN	Leaves nothing at all
+PLUGIN_SC_PS_NOANSWER
+	EN	MusicIP did not answer
+PLUGIN_SC_PS_EMPTY
+	EN	Nothing to search for - fill in a condition
+PLUGIN_SC_PS_BADCHAR
+	EN	MusicIP cannot accept %s in a power search.
+PLUGIN_SC_PS_OP_CONTAINS
+	EN	contains
+PLUGIN_SC_PS_OP_OMITS
+	EN	omits
+PLUGIN_SC_PS_OP_MISSING
+	EN	missing
+PLUGIN_SC_PS_OP_RANGE
+	EN	range
+PLUGIN_SC_PS_F_ALBUM
+	EN	Album
+PLUGIN_SC_PS_F_ARTIST
+	EN	Artist
+PLUGIN_SC_PS_F_COMPOSER
+	EN	Composer
+PLUGIN_SC_PS_F_CONDUCTOR
+	EN	Conductor
+PLUGIN_SC_PS_F_FILE
+	EN	File
+PLUGIN_SC_PS_F_GENRE
+	EN	Genre
+PLUGIN_SC_PS_F_ORCHESTRA
+	EN	Orchestra/Band
+PLUGIN_SC_PS_F_BITRATE
+	EN	Bitrate
+PLUGIN_SC_PS_F_ADDED
+	EN	Added
+PLUGIN_SC_PS_F_LASTPLAY
+	EN	Last Play
+PLUGIN_SC_PS_F_PLAYCOUNT
+	EN	Play Count
+PLUGIN_SC_PS_F_RATING
+	EN	Rating in *s
+PLUGIN_SC_PS_F_YEAR
+	EN	Year YYYY
+PLUGIN_SC_PS_BUTTONHELP
+	EN	Build and save search on next page. It will add itself as a choice in Filter Menu above. A new save overwrites previous. Frequently needed filters should be saved in the host
+PLUGIN_SC_PS_REMOVE
+	EN	Remove

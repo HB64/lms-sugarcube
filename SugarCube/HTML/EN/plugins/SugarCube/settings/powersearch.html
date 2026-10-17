@@ -1,0 +1,414 @@
+[% pagetitle = 'PLUGIN_SC_PS_TITLE' | string; pageicon = 'PLUGIN_SUGARCUBELV' %]
+[%- pwd_list = BLOCK -%]/
+	<a href="[% webroot %]plugins/SugarCube/settings/liveview.html?player=[% player | uri %]">
+		[% "PLUGIN_SUGARCUBELV" | string %]
+	</a>
+	/
+	<a href="[% webroot %][% path %]?player=[% player | uri %]">
+		[% "PLUGIN_SC_PS_TITLE" | string %]
+	</a>
+[% END -%]
+[%- pageHeaderInfo = BLOCK %]
+
+[% END -%]
+[% PROCESS pageheader.html %]
+
+<div style="padding:15px;">
+
+[% IF pscap != 'ok' %]
+
+	<!-- Outcomes 1 and 2: the page proper is not drawn, so a headless host can never be given a search to
+	     ignore. The message says why. -->
+	<div style="padding:8px 10px; border-left:3px solid #f04747; background:rgba(240,71,71,0.12); color:#f04747; font-weight:bold;">
+		[% IF pscap == 'headless' %][% "PLUGIN_SC_PS_HEADLESS" | string %][% ELSE %][% "PLUGIN_SC_PS_NOHOST" | string %][% END %]
+	</div>
+
+[% ELSE %]
+
+	<!-- OUTCOME 3, the page proper.
+
+	     EVERY ROW IS DRAWN BY THE JAVASCRIPT BELOW, including the ones that were already saved.
+	     That is deliberate: a row drawn here in the template and a row added by a click would be
+	     two copies of the same markup, and they would drift. The page ships an empty frame and one
+	     seed string, and one function draws both cases.
+
+	     Nothing is sent to Lyrion until Save Search or a Reset. Adding a condition, removing one,
+	     adding a set, and switching a row to 'range' all happen on the spot. -->
+
+	<!-- THE WAY BACK, at the top: Material draws this page as a fullscreen dialog with no breadcrumb. -->
+	<div style="padding:0 0 14px 0;">
+		<button type="button" onclick="window.location.href='[% webroot %]plugins/SugarCube/settings/liveview.html?player=[% player | uri %]'" style="padding:7px 16px; cursor:pointer;">&#8592; [% "PLUGIN_SUGARCUBELV" | string %]</button>
+	</div>
+
+	<div style="display:flex; align-items:baseline; gap:8px; padding:0 0 4px 0;">
+		<div style="font-weight:bold; font-size:1.05em;">[% "PLUGIN_SC_PS_TITLE" | string %]</div>
+		<span class="sc-info-wrap">
+			<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+			<div class="sc-info-popover">
+				[% "PLUGIN_SC_PS_HELP" | string %]
+				<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+				<div style="clear:both;"></div>
+			</div>
+		</span>
+		<div style="opacity:0.6; font-size:0.85em;">[% playername %]</div>
+	</div>
+
+	[% IF psmessage %]
+	<div style="margin:10px 0 14px 0; padding:7px 10px; font-weight:bold; border-left:3px solid [% IF psgood %]#3fb950; background:rgba(63,185,80,0.12); color:#9fd88a[% ELSE %]#f04747; background:rgba(240,71,71,0.12); color:#f04747[% END %];">[% psmessage %]</div>
+	[% END %]
+
+	<form method="get" action="[% webroot %][% path %]" onsubmit="return psSerialise()">
+		<input type="hidden" name="player" value="[% player %]">
+		<input type="hidden" name="pssave" value="1">
+		<input type="hidden" name="psdata" id="ps-data" value="">
+
+		<!-- The saved search, in the wire format. A textarea because it carries newlines and an
+		     attribute would not keep them reliably. Never shown. -->
+		<textarea id="ps-seed" style="display:none;">[% psdata | html %]</textarea>
+
+		<div id="ps-sets"></div>
+
+		<!-- TWO LINES, on purpose. Save Search is the one that does something and sits alone at the
+		     front with the number it is judged against. More Params starts a whole new set and is
+		     kept on a second line, away from the Add Condition links, so a thumb cannot take one
+		     for the other. -->
+		<div style="margin-top:16px; padding-top:12px; border-top:1px solid rgba(128,128,128,0.3); display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+			<button type="submit" style="padding:7px 16px; cursor:pointer; font-weight:bold;">[% "PLUGIN_SC_PS_SAVE" | string %]</button>
+			<span style="display:inline-flex; align-items:center; gap:5px;">
+				<label class="stdlabel" for="ps-min" style="margin:0;">[% "PLUGIN_SC_PS_MIN" | string %]</label>
+				<span class="sc-info-wrap">
+					<span class="sc-info-icon" onclick="scToggleInfo(this)">&#9432;</span>
+					<div class="sc-info-popover">
+						[% "PLUGIN_SC_PS_MINHELP" | string %]
+						<button type="button" onclick="this.parentElement.style.display='none'">[% "PLUGIN_SC_WEB_CLOSE" | string %]</button>
+						<div style="clear:both;"></div>
+					</div>
+				</span>
+				<input type="number" class="stdedit" id="ps-min" min="[% psfloor %]" max="500" value="[% psmin %]" style="width:5em;">
+			</span>
+		</div>
+		<div style="margin-top:10px; display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+			<button type="button" onclick="psAddSet()" style="padding:5px 11px; cursor:pointer; font-size:0.92em;">[% "PLUGIN_SC_PS_ADDSET" | string %]</button>
+			<button type="button" onclick="psReset()" style="padding:5px 11px; cursor:pointer; font-size:0.92em;">[% "PLUGIN_SC_PS_RESET" | string %]</button>
+		</div>
+
+	</form>
+
+	<style>
+	[%# Henk, 2026-10-17 - same info-icon/popover widget as liveview.html/player.html %]
+	[%# (sc-info-wrap/sc-info-icon/sc-info-popover, scToggleInfo further down), instead %]
+	[%# of a page-specific one, so every SugarCube page looks and behaves the same way.  %]
+	.sc-info-wrap { position:relative; display:inline-block; }
+	.sc-info-icon { cursor:pointer; opacity:0.7; font-size:1.15em; }
+	.sc-info-popover {
+		display:none; position:absolute; z-index:1000; top:100%; left:0; margin-top:6px;
+		width:320px; max-width:78vw; background:#2b2b2b; color:#fff; text-align:left;
+		border-radius:8px; padding:14px; box-shadow:0 4px 16px rgba(0,0,0,0.5);
+		font-size:0.85em; line-height:1.45; font-weight:normal;
+	}
+	.sc-info-popover button {
+		background:none; border:1px solid #9c9; color:#9c9; border-radius:16px;
+		padding:6px 16px; cursor:pointer; float:right; margin-top:12px;
+	}
+
+		.ps-set + .ps-set { margin-top:14px; padding-top:13px; border-top:1px dashed rgba(128,128,128,0.35); }
+		.ps-setline { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding-bottom:9px; }
+		/* MATCH gets a width of its own. Without one it takes the browser's default select width,
+		   which on top of Material's 25px arrow reserve left a wide gap after a three-letter word. */
+		.ps-match { width:5.2em; }
+		/* COLUMN GAP, not 6px. Material draws its own arrow hard against each box's right edge, so
+		   the field box's arrow landed a few pixels from the word in the comparison box and read as
+		   sitting on it. The field column stays at 11em because 'Orchestra/Band' needs it, and the
+		   comparison column is 8em so 'contains' clears the arrow reserve. */
+		.ps-row { display:grid; grid-template-columns:11em 8em minmax(0,1fr) 1.4em;
+			  column-gap:14px; row-gap:6px; align-items:center; margin-bottom:6px; }
+		.ps-row select, .ps-row input { width:100%; box-sizing:border-box; min-width:0; }
+		/* Lyrion swaps each select for a div widget that can size itself wider than its grid cell and overlap the
+		   next column; keep it inside the cell. */
+		.ps-row > * { min-width:0; }
+		.ps-row .custom-select-container { width:100% !important; min-width:0; max-width:100%; box-sizing:border-box; }
+		.ps-row .custom-select-opener { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+		.ps-vals { display:flex; align-items:center; gap:5px; min-width:0; }
+		.ps-dash { opacity:0.55; flex:none; }
+		.ps-del { width:18px; height:18px; flex:none; justify-self:end; border:none; border-radius:50%;
+			  background:#a4241c; color:#fff; line-height:0; cursor:pointer; padding:0;
+			  display:inline-flex; align-items:center; justify-content:center; }
+		.ps-addrow, .ps-addrow:link, .ps-addrow:visited { color:var(--text-color, #eee) !important; font-size:1.1em; display:inline-block; padding:3px 0; }
+		/* PHONE. The row folds in two - field and comparison on the first line, value and the remove
+		   dot on the second - which is what fits the 50 readable characters across. */
+		@media (max-width:560px) {
+			.ps-row { grid-template-columns:minmax(0,1fr) 7.5em; column-gap:10px; row-gap:5px;
+				  padding:6px; margin-bottom:7px;
+				  background:rgba(128,128,128,0.10); border-radius:3px; }
+			.ps-vals { grid-column:1; }
+			.ps-del { grid-column:2; justify-self:end; }
+		}
+	</style>
+
+	<script type="text/javascript">
+	/* ============================================================================================
+	   ONE FUNCTION DRAWS A ROW, and it is this one. The saved search and a row added by a click go
+	   through the same code, so the two can never look different.
+
+	   The page holds the whole search in the browser and sends it in a single hidden field when
+	   Save Search is pressed. Nothing else talks to Lyrion, which is why Add, Remove and Reset are
+	   instant and why nothing typed is ever lost to a redraw.
+	   ============================================================================================ */
+
+	var PSFIELDS = [
+[% FOREACH f IN psfields %]		{ id:"[% f.id %]", label:"[% f.label %]", kind:"[% f.kind %]", hint:"[% f.hint %]" }[% UNLESS loop.last %],[% END %]
+[% END %]	];
+
+	var PSOPS = {
+		text: [ ["contains", "[% "PLUGIN_SC_PS_OP_CONTAINS" | string %]"],
+			["omits",    "[% "PLUGIN_SC_PS_OP_OMITS" | string %]"],
+			["missing",  "[% "PLUGIN_SC_PS_OP_MISSING" | string %]"] ],
+		num:  [ ["gt", ">"], ["lt", "<"],
+			["range",   "[% "PLUGIN_SC_PS_OP_RANGE" | string %]"],
+			["missing", "[% "PLUGIN_SC_PS_OP_MISSING" | string %]"] ]
+	};
+
+	var PSMINSTART = [% psstart %];
+
+	var PSTEXT = {
+		match:   "[% "PLUGIN_SC_PS_MATCH" | string %]",
+		andmatch:"[% "PLUGIN_SC_PS_MATCHAND" | string %]",
+		following:"[% "PLUGIN_SC_PS_OFFOLLOWING" | string %]",
+		all:     "[% "PLUGIN_SC_PS_ALL" | string %]",
+		any:     "[% "PLUGIN_SC_PS_ANY" | string %]",
+		addrow:  "[% "PLUGIN_SC_PS_ADDROW" | string %]",
+		remove:  "[% "PLUGIN_SC_PS_REMOVE" | string %]"
+	};
+
+	[%# scToggleInfo - same widget as liveview.html/player.html (see those for the full history); %]
+	[%# clamped against both screen edges since a popover here can sit anywhere in the row.         %]
+	function scToggleInfo(el) {
+		var pop = el.nextElementSibling;
+		var opening = (pop.style.display !== 'block');
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) { p.style.display = 'none'; });
+		if (!opening) { return; }
+
+		pop.style.left = '0';
+		pop.style.display = 'block';
+
+		var margin = 8;
+		var rect = pop.getBoundingClientRect();
+		var shift = 0;
+		if (rect.right > window.innerWidth - margin) { shift = (window.innerWidth - margin) - rect.right; }
+		if (rect.left + shift < margin) { shift = margin - rect.left; }
+		if (shift) { pop.style.left = Math.round(shift) + 'px'; }
+	}
+
+	document.addEventListener('click', function(e) {
+		document.querySelectorAll('.sc-info-popover').forEach(function(p) {
+			if (p.style.display === 'block' && !p.closest('.sc-info-wrap').contains(e.target)) {
+				p.style.display = 'none';
+			}
+		});
+	});
+
+	function psFieldById(id) {
+		for (var i = 0; i < PSFIELDS.length; i++) { if (PSFIELDS[i].id === id) return PSFIELDS[i]; }
+		return PSFIELDS[0];
+	}
+	function psOpsFor(field) { return (field.kind === 'text') ? PSOPS.text : PSOPS.num; }
+
+	function psEl(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
+
+	/* The one row drawer. */
+	function psDrawRow(row) {
+		var wrap = psEl('div', 'ps-row');
+
+		var fsel = psEl('select', 'stdedit ps-f');
+		for (var i = 0; i < PSFIELDS.length; i++) {
+			var o = document.createElement('option');
+			o.value = PSFIELDS[i].id; o.text = PSFIELDS[i].label;
+			fsel.appendChild(o);
+		}
+		fsel.value = psFieldById(row.f).id;
+
+		var osel = psEl('select', 'stdedit ps-op');
+
+		var vals = psEl('span', 'ps-vals');
+		var v1 = psEl('input', 'stdedit ps-v'); v1.type = 'text';
+		var dash = psEl('span', 'ps-dash'); dash.innerHTML = '&ndash;';
+		var v2 = psEl('input', 'stdedit ps-v2'); v2.type = 'text';
+		vals.appendChild(v1); vals.appendChild(dash); vals.appendChild(v2);
+
+		/* HB64's shape: an SVG cross with a hover label, not a bare character. It takes the skin's
+		   colour through currentColor and carries width and height of its own, so it survives a
+		   skin that sets no CSS variables. */
+		var del = psEl('button', 'ps-del');
+		del.type = 'button';
+		del.title = PSTEXT.remove;
+		del.setAttribute('aria-label', PSTEXT.remove);
+		del.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
+			+ '<path d="M18.3 5.71L12 12.01l-6.3-6.3-1.4 1.4 6.3 6.3-6.3 6.3 1.4 1.4 6.3-6.3 6.3 6.3 1.4-1.4-6.3-6.3 6.3-6.3z"/></svg>';
+		del.onclick = function() { psRemoveRow(wrap); };
+
+		wrap.appendChild(fsel); wrap.appendChild(osel); wrap.appendChild(vals); wrap.appendChild(del);
+
+		function fillOps(keep) {
+			var list = psOpsFor(psFieldById(fsel.value));
+			osel.innerHTML = '';
+			var found = false;
+			for (var i = 0; i < list.length; i++) {
+				var o = document.createElement('option');
+				o.value = list[i][0]; o.text = list[i][1];
+				osel.appendChild(o);
+				if (list[i][0] === keep) found = true;
+			}
+			osel.value = found ? keep : list[0][0];
+		}
+
+		/* Shows only the boxes the chosen comparison actually uses. 'missing' needs none at all,
+		   'range' needs two, everything else needs one. */
+		function shape() {
+			var f = psFieldById(fsel.value);
+			var op = osel.value;
+			var isRange = (op === 'range');
+			var isMissing = (op === 'missing');
+			dash.style.display = isRange ? '' : 'none';
+			v2.style.display = isRange ? '' : 'none';
+			v1.style.display = isMissing ? 'none' : '';
+			vals.style.visibility = isMissing ? 'hidden' : 'visible';
+			v1.placeholder = f.hint; v2.placeholder = f.hint;
+		}
+
+		fsel.onchange = function() { fillOps(osel.value); shape(); };
+		osel.onchange = shape;
+
+		fillOps(row.op);
+		v1.value = row.v || '';
+		v2.value = row.v2 || '';
+		shape();
+
+		return wrap;
+	}
+
+	function psDrawSet(set) {
+		var block = psEl('div', 'ps-set');
+
+		var line = psEl('div', 'ps-setline');
+		var joiner = psEl('span', 'ps-joiner');
+		joiner.style.fontWeight = 'bold';
+		line.appendChild(joiner);
+
+		var msel = psEl('select', 'stdedit ps-match');
+		var oa = document.createElement('option'); oa.value = 'all'; oa.text = PSTEXT.all;
+		var ob = document.createElement('option'); ob.value = 'any'; ob.text = PSTEXT.any;
+		msel.appendChild(oa); msel.appendChild(ob);
+		msel.value = (set.match === 'any') ? 'any' : 'all';
+		msel.style.width = 'auto';
+		line.appendChild(msel);
+
+		var tail = psEl('span'); tail.textContent = PSTEXT.following;
+		line.appendChild(tail);
+
+		var rows = psEl('div', 'ps-rows');
+		for (var i = 0; i < set.rows.length; i++) { rows.appendChild(psDrawRow(set.rows[i])); }
+
+		var add = psEl('a', 'ps-addrow');
+		add.href = 'javascript:void(0)';
+		add.textContent = PSTEXT.addrow;
+		add.onclick = function() { rows.appendChild(psDrawRow({ f:'genre', op:'contains', v:'', v2:'' })); };
+
+		block.appendChild(line); block.appendChild(rows); block.appendChild(add);
+		return block;
+	}
+
+	/* Every set after the first reads 'and match ... of the following'. The word sits in front of
+	   the switch rather than on a line of its own, so the permanent join between sets is visible
+	   without costing a line. Re-run after any set is added or removed. */
+	function psRelabel() {
+		var sets = document.getElementById('ps-sets').children;
+		for (var i = 0; i < sets.length; i++) {
+			var j = sets[i].querySelector('.ps-joiner');
+			j.textContent = (i === 0) ? PSTEXT.match : PSTEXT.andmatch;
+		}
+	}
+
+	function psRemoveRow(rowEl) {
+		var rows = rowEl.parentNode;
+		var block = rows.parentNode;
+		rows.removeChild(rowEl);
+		if (rows.children.length === 0) {
+			var holder = document.getElementById('ps-sets');
+			holder.removeChild(block);
+			if (holder.children.length === 0) { psAddSet(); }
+			psRelabel();
+		}
+	}
+
+	function psAddSet() {
+		document.getElementById('ps-sets').appendChild(
+			psDrawSet({ match:'all', rows:[ { f:'genre', op:'contains', v:'', v2:'' } ] })
+		);
+		psRelabel();
+	}
+
+	/* RESET empties the page to a single blank row. It starts a fresh search; it does not restore
+	   the saved one, and it does not touch what is stored. Leaving the page and coming back shows
+	   the stored search again. */
+	function psReset() {
+		document.getElementById('ps-sets').innerHTML = '';
+		document.getElementById('ps-min').value = PSMINSTART;
+		psAddSet();
+	}
+
+	function psParse(text) {
+		/* min stays null when the seed carries no number. The box is then left exactly as the
+		   server drew it - overwriting it here with a default of our own is what made a fresh
+		   player show 20 when the server had sent 50. */
+		var sets = [], set = null, min = null;
+		var lines = text.split(/\r?\n/);
+		for (var i = 0; i < lines.length; i++) {
+			var f = lines[i].split('\t');
+			if (f[0] === 'M') { var n = parseInt(f[1], 10); if (n > 0) { min = n; } }
+			else if (f[0] === 'S') { set = { match: (f[1] === 'any' ? 'any' : 'all'), rows: [] }; sets.push(set); }
+			else if (f[0] === 'R' && set) { set.rows.push({ f:f[1], op:f[2], v:f[3] || '', v2:f[4] || '' }); }
+		}
+		return { min: min, sets: sets };
+	}
+
+	function psClean(s) { return (s || '').replace(/[\t\r\n]/g, ' '); }
+
+	/* Everything on screen, into one field, in the order it is drawn. */
+	function psSerialise() {
+		var out = ['M\t' + (document.getElementById('ps-min').value || '20')];
+		var sets = document.getElementById('ps-sets').children;
+		for (var i = 0; i < sets.length; i++) {
+			out.push('S\t' + sets[i].querySelector('.ps-match').value);
+			var rows = sets[i].querySelectorAll('.ps-row');
+			for (var j = 0; j < rows.length; j++) {
+				out.push(['R',
+					rows[j].querySelector('.ps-f').value,
+					rows[j].querySelector('.ps-op').value,
+					psClean(rows[j].querySelector('.ps-v').value),
+					psClean(rows[j].querySelector('.ps-v2').value)].join('\t'));
+			}
+		}
+		document.getElementById('ps-data').value = out.join('\n');
+		return true;
+	}
+
+	(function() {
+		var seed = psParse(document.getElementById('ps-seed').value);
+		if (seed.min) { document.getElementById('ps-min').value = seed.min; }
+		var holder = document.getElementById('ps-sets');
+		if (!seed.sets.length) { psAddSet(); }
+		else {
+			for (var i = 0; i < seed.sets.length; i++) {
+				if (!seed.sets[i].rows.length) { seed.sets[i].rows.push({ f:'genre', op:'contains', v:'', v2:'' }); }
+				holder.appendChild(psDrawSet(seed.sets[i]));
+			}
+			psRelabel();
+		}
+	})();
+	</script>
+
+[% END %]
+
+</div>
+
+[% PROCESS pagefooter.html %]
