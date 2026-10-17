@@ -187,10 +187,10 @@ sub initPlugin {
 	my $client = shift;
 	$class->SUPER::initPlugin();
 
-	Plugins::SugarCube::Settings->new;
-	Plugins::SugarCube::PlayerSettings->new;
-	Plugins::SugarCube::SettingsExports->new;
-	Plugins::SugarCube::SettingsMusicIP->new;
+	Plugins::SugarCube::Settings->new($class);
+	Plugins::SugarCube::PlayerSettings->new($class);
+	Plugins::SugarCube::SettingsExports->new($class);
+	Plugins::SugarCube::SettingsMusicIP->new($class);
 
 	Plugins::SugarCube::Breakout::init();
 

@@ -630,13 +630,31 @@
 		dd.style.display = 'none';
 		scLvMenuOpen = false;
 	});
+	[%# Henk, 2026-10-17 - positions/sizes a .sclv-panel from #sclvMenuBtn's own on-screen spot, %]
+	[%# same approach scQueueToggle already uses for the Queue panel (see that function's comment). %]
+	[%# Called both on open and after every ajaxUpdate re-open, since sclv-top/sclvMenuBtn are      %]
+	[%# rebuilt from scratch each time #sclvbody's innerHTML is replaced.                            %]
+	function scLvPositionPanel(el) {
+		var btn = document.getElementById('sclvMenuBtn');
+		if (!btn || !el) { return; }
+		var r = btn.getBoundingClientRect();
+		var top = Math.round(r.bottom + 6);
+		el.style.top = top + 'px';
+		el.style.left = Math.round(r.left) + 'px';
+		el.style.right = 'auto';
+		el.style.bottom = 'auto';
+		el.style.maxHeight = Math.max(120, Math.round(window.innerHeight - top - 76)) + 'px';
+	}
 	function scLvPanelOpen(name) {
 		var dd = document.getElementById('sclvMenuDropdown');
 		if (dd) { dd.style.display = 'none'; }
 		scLvMenuOpen = false;
 		var id = (name === 'history') ? 'sclvPanelHistory' : 'sclvPanelMip';
 		var el = document.getElementById(id);
-		if (el) { el.classList.add('open'); }
+		if (el) {
+			scLvPositionPanel(el);
+			el.classList.add('open');
+		}
 		scLvOpenPanelId = id;
 	}
 	function scLvPanelClose() {
@@ -866,6 +884,7 @@
 					if (scLvOpenPanelId) {
 						var scPanelAfterEl = document.getElementById(scLvOpenPanelId);
 						if (scPanelAfterEl) {
+							scLvPositionPanel(scPanelAfterEl);
 							scPanelAfterEl.classList.add('open');
 							var scPanelBodyAfter = scPanelAfterEl.querySelector('.sclv-panel-body');
 							if (scPanelBodyAfter && scPanelScrollBefore) { scPanelBodyAfter.scrollTop = scPanelScrollBefore; }
@@ -976,6 +995,9 @@
 		[%# content width even with flex:1 (default min-width:auto), so a long Recipe/Filter option      %]
 		[%# text was forcing this row, and the whole page, wider than the screen on mobile.              %]
 		.sclv-setting-row select, .sclv-setting-row input[type="range"] { flex:1; min-width:0; }
+		/* Lyrion swaps each select for a div widget (custom-select-container); the rule above never reaches it, so it sized itself to its longest option and widened the page on a phone. */
+		.sclv-setting-row .custom-select-container { flex:1; min-width:0; }
+		.sclv-setting-row .custom-select-opener { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 		.sclv-setting-value { flex:none; min-width:32px; text-align:right; opacity:0.85; font-size:0.9em; }
 
 		[%# Info-icon/popover widget, matching player.html/quicksettings.html - see scToggleInfo above. %]
@@ -1095,22 +1117,26 @@
 			display: block;
 			padding: 12px 14px;
 			font-weight: bold;
-			color: inherit;
+			color: var(--text-color, #333) !important;
 			text-decoration: none;
 		}
 		.sclv-menu-dropdown a:hover, .sclv-menu-dropdown a:active { background: rgba(128,128,128,0.15); }
 
-		[%# 68px = the 64px transport bar + the 4px progress strip sitting just above it (both fixed, %]
-		[%# see further down this file) - the panel stops exactly where those begin instead of         %]
-		[%# guessing a value, so Henk's "transportbalk moet zichtbaar blijven" holds regardless of      %]
-		[%# panel content.                                                                              %]
+		[%# Henk, 2026-10-17 - popup like the Queue panel instead of a full-height overlay, same as   %]
+		[%# every other plugin's menu/history view. Position (top/left) and max-height are computed     %]
+		[%# from #sclvMenuBtn's own on-screen position by scLvPositionPanel (see that JS function),      %]
+		[%# same approach scQueueToggle already uses for the Queue panel.                                %]
 		.sclv-panel {
 			display: none;
 			position: fixed;
-			left: 0; right: 0; top: 0; bottom: 68px;
-			z-index: 800;
+			z-index: 900;
+			width: min(94vw, 460px);
+			max-height: 60vh;
 			background: var(--background-color, #fff);
 			color: var(--text-color, #333);
+			border: 1px solid var(--list-item-border-color, rgba(128,128,128,0.35));
+			border-radius: 8px;
+			box-shadow: 0 4px 16px rgba(0,0,0,0.35);
 			flex-direction: column;
 		}
 		.sclv-panel.open { display: flex; }
@@ -1166,9 +1192,7 @@
 			[%# The old .sclv-mipheader fieldset/legend best-effort rule (targeting the settingGroup   %]
 			[%# WRAPPER's unseen markup) is gone along with settingGroup itself - see sclv-menu above.  %]
 			[%# The old .sclv-menu-body max-height:45vh mobile override that used to live here is gone  %]
-			[%# too - that was exactly the "steals room from the list" rule the 2026-09-12 menu+panel   %]
-			[%# redesign replaced; .sclv-panel is already full height (minus the transport bar) on      %]
-			[%# every screen size, so no mobile-specific override is needed here anymore.               %]
+			[%# too - .sclv-panel sizes/positions itself via scLvPositionPanel instead (2026-10-17).     %]
 		}
 	</style>
 
@@ -1198,7 +1222,9 @@
 		[%# Close button removed, Henk 2026-09-05 - "kan het kruis weg en zo gemaakt worden dat als   %]
 		[%# je ergens buiten die lijst klikt hij sluit". The document click-outside listener above    %]
 		[%# (in scQueueToggle's section of the outer script) closes the panel now instead.            %]
-		<div style="padding:8px 10px; border-bottom:1px solid var(--list-item-border-color, rgba(128,128,128,0.25)); position:sticky; top:0; background:inherit;">
+		<div style="padding:8px 10px; border-bottom:1px solid var(--list-item-border-color, rgba(128,128,128,0.25)); position:sticky; top:0; background:inherit; display:flex; align-items:center; gap:8px;">
+			[%# Henk, 2026-10-17 - explicit back arrow next to the click-outside-to-close behaviour above. %]
+			<span onclick="scQueueToggle()" style="cursor:pointer; font-size:1.2em; line-height:1;" aria-label="Close" title="Close">&#8592;</span>
 			<strong>Queue</strong>
 		</div>
 		<div id="sc-queue-list"><div style="padding:12px; opacity:0.7;">Loading...</div></div>
@@ -1206,36 +1232,9 @@
 
 <div id="sclvbody" style="padding-bottom:92px; padding-left:1.5em; padding-right:1.5em;">
 [% END %]
-	[%# sclv-top, Henk 2026-09-05 - "make what's under Last MIP Response scrollable without the    %]
-	[%# top part disappearing". The MusicIP Track Recommendations list below can run to dozens of   %]
-	[%# rows, and this whole page previously scrolled as one piece - so scrolling down to see more   %]
-	[%# of that list pushed Last MIP Response, Current/Next Track and their New Chain/Replace Track  %]
-	[%# buttons off the top of the screen. position:sticky pins this div to the top of the page's    %]
-	[%# own scroll (the same scroll the fixed transport bar already assumes exists) once it would    %]
-	[%# otherwise scroll out of view - no fixed height or overflow container needed, and nothing     %]
-	[%# below has to change to make room, unlike position:fixed. background is needed so recommend-  %]
-	[%# ation rows scrolling underneath do not show through while this is pinned.                    %]
-	[%# Henk, 2026-09-06 - "als je scrolt loopt de tekst door elkaar", reproducible in both Firefox   %]
-	[%# and Chrome once actually isolated (an earlier JS-reflow attempt aimed at Firefox specifically %]
-	[%# was wrong and made it visibly worse everywhere - reverted). Real cause: position:sticky does   %]
-	[%# NOT give an element its own block formatting context, so a bottom margin on sclv-top's last    %]
-	[%# child (the settingGroup fieldset Lyrion's own WRAPPER renders - markup this plugin cannot      %]
-	[%# see) can collapse straight through sclv-top's own boundary into the table right after it,      %]
-	[%# shrinking the effective space the sticky box visually occupies versus what it reserves - so    %]
-	[%# the MusicIP Track Recommendations table scrolls up underneath and visually overlaps it once    %]
-	[%# stuck, instead of stopping flush below. display:flow-root gives sclv-top its own formatting    %]
-	[%# context (the standard, purpose-built fix for exactly this "child's margin collapsing through   %]
-	[%# a parent" case), containing that margin instead of letting it leak out - a static CSS property %]
-	[%# with no runtime toggling, so unlike the reverted attempt it cannot itself cause any flicker.    %]
-	[%# Henk, 2026-09-08 - "de marge onder de tekst verdwijnt... ook op mijn tablet". Not a browser  %]
-[%# quirk - filler2's 12px gap (sugarcube.css) sits in normal flow AFTER this sticky element, so  %]
-[%# it scrolls out of view the moment you scroll past it, leaving the table's first row flush     %]
-[%# under the pinned header with no visible gap at all. Fixed here with padding-bottom on this    %]
-[%# sticky element itself instead - that space stays PINNED with the header as it scrolls, unlike %]
-[%# a sibling's own margin/height, which is what both earlier "sticky History heading" attempts   %]
-[%# got wrong (adding new content INSIDE here broke on the settingGroup macro's own layout both   %]
-[%# times) - this only adds a padding value to the sticky container that was already there.       %]
-<div id="sclv-top" style="position:sticky; top:0; z-index:500; display:flow-root; padding-bottom:12px; padding-left:1.5em; padding-right:1.5em; background:var(--background-color, #fff);">
+	[%# sclv-top, Henk 2026-10-17 - no longer pinned; the whole page scrolls as one piece now,   %]
+	[%# covers included, which frees up more room for the Mix Settings sliders further down.       %]
+<div id="sclv-top" style="padding-left:1.5em; padding-right:1.5em;">
 	[%# Henk, 2026-08-26: dropped the "SC Live View" row - Material's own dialog toolbar already   %]
 	[%# reads "SugarCube Live View" for this page, so the two just repeated the same title.        %]
 	[%# sclv-menu button, added 2026-09-12 (Henk) - top-left of OUR OWN content, directly under      %]

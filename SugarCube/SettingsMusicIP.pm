@@ -84,18 +84,26 @@ sub getMipDefaultRoot {
 	return $prefs->get('nasconvertpath') || $prefs->get('localmediapath') || '';
 }
 
+# MusicIP Server port - separate from the Mixer's own Host/Port (Main page) for a "combined
+# container" setup where they're genuinely different processes. Blank = same port as the Mixer.
+sub _mipServerPort {
+	return $prefs->get('mipserverport') || $prefs->get('sugarport');
+}
+
 sub getMipCacheStatus {
 	if ($sc_mipCache->{data} && (time() - $sc_mipCache->{ts} < $sc_mipCacheTTL)) {
 		return $sc_mipCache->{data};
 	}
 
-	my $status = { total => '?', mixable => '?', todo => '?', active => 'Unreachable', cpuuse => '', reload => 0, mixer => 0 };
+	my $status = { total => '?', mixable => '?', todo => '?', active => 'Unreachable', cpuuse => '', reload => 0, mixer => 0, mixersongs => '?' };
 
 	my $miphosturl = $prefs->get('miphosturl');
 	my $sugarport = $prefs->get('sugarport');
+	my $serverport = _mipServerPort();
 	my $ua = _mipUA(2);
-	my $http = $ua->get("http://$miphosturl:$sugarport/server");
+	my $http = $ua->get("http://$miphosturl:$serverport/server");
 	my $hadServer = ($http && $http->is_success) ? 1 : 0;
+	$status->{mixer} = $hadServer ? 0 : 1;
 
 	if ($hadServer) {
 		my $body = $http->content;
@@ -141,25 +149,22 @@ sub getMipCacheStatus {
 		}
 	}
 
+	# Mixer song count - always fetched (not just a Total fallback), since the Mixer and Server
+	# can briefly disagree after a library change (Mixer restarts 30-45s after Server).
+	my $cnt = _mipUA(2)->get("http://$miphosturl:$sugarport/api/getSongCount");
+	if ($cnt && $cnt->is_success && $cnt->content =~ /(\d+)/) {
+		$status->{mixersongs} = $1;
+	}
+
 	# No matching ids found above - either /server failed outright, or it answered with a
-	# companion page that doesn't use SugarCube's expected markup (every custom front-end is
-	# different, and most MIP installs won't have one that matches at all). Fall back to MIP's
-	# own universal API, which every install exposes regardless of what (if anything) serves
-	# /server - degrades to total count + a plain "Active", no mixable/todo breakdown, but no
-	# longer stuck on the default "Unreachable" just because the page looked different.
+	# companion page that doesn't use SugarCube's expected markup. Fall back to the Mixer's own
+	# count for Total too - degrades to total count + a plain "Active", no mixable/todo breakdown.
 	if ($status->{total} eq '?') {
-		# Reuse the same universal API fallback for both cases, but only mark this a bare
-		# MusicMagicMixer.exe (mixer=1, hides Add/Search/Validate, routes Refresh through the
-		# sidecar) when /server genuinely doesn't exist - not when it exists but just doesn't use
-		# SugarCube's expected markup. A /server that responds still supports the normal
-		# /server/add, /server/search, /server/refresh actions regardless of its page design.
-		my $cnt = _mipUA(2)->get("http://$miphosturl:$sugarport/api/getSongCount");
-		if ($cnt && $cnt->is_success && $cnt->content =~ /(\d+)/) {
-			$status->{total}   = $1;
+		if ($status->{mixersongs} ne '?') {
+			$status->{total}   = $status->{mixersongs};
 			$status->{mixable} = 'n/a';
 			$status->{todo}    = 'n/a';
 			$status->{active}  = 'Active';
-			$status->{mixer}   = $hadServer ? 0 : 1;
 		}
 	}
 
@@ -173,8 +178,8 @@ sub mipCommand {
 	my ($path, %query) = @_;
 
 	my $miphosturl = $prefs->get('miphosturl');
-	my $sugarport = $prefs->get('sugarport');
-	my $url = "http://$miphosturl:$sugarport$path";
+	my $serverport = _mipServerPort();
+	my $url = "http://$miphosturl:$serverport$path";
 	if (%query) {
 		$url .= '?' . join('&', map { "$_=" . URI::Escape::uri_escape($query{$_}) } keys %query);
 	}
@@ -187,45 +192,22 @@ sub mipCommand {
 	return $ok;
 }
 
-# Mixer only: the mip-refresh sidecar (port 8199) restarts the Mixer so it reloads its library.
+# The mip-refresh sidecar restarts/reloads the Mixer so it picks up library changes the Server
+# just made (needed whenever the Mixer is a separate process from the Server). Blank port = the
+# feature is off, a no-op success rather than an error.
 sub mipSidecarRefresh {
+	my ($endpoint) = @_;
+	$endpoint ||= 'refresh-when-idle';
+
+	my $refreshport = $prefs->get('miprefreshport');
+	return 1 unless $refreshport;
+
 	my $miphosturl = $prefs->get('miphosturl');
-	my $http = _mipUA(10)->get("http://$miphosturl:8199/refresh");
+	my $http = _mipUA(10)->get("http://$miphosturl:$refreshport/$endpoint");
 	my $ok = $http && $http->is_success;
 	$log->warn("SC MusicIP - sidecar refresh failed (" . ($http ? $http->status_line : 'no response') . ")\n")
 		unless $ok;
 	return $ok;
-}
-
-# Search returns an HTML results page rather than a status - strip it down to plain text the same
-# way MIP's own page does client-side (block elements become line breaks, tags stripped).
-sub mipSearch {
-	my ($query) = @_;
-
-	my $miphosturl = $prefs->get('miphosturl');
-	my $sugarport = $prefs->get('sugarport');
-	my $ua = _mipUA(5);
-	my $http = $ua->get("http://$miphosturl:$sugarport/server/search?query=" . URI::Escape::uri_escape($query));
-
-	unless ($http && $http->is_success) {
-		$log->warn("SC MusicIP - search failed (" . ($http ? $http->status_line : 'no response') . ")\n");
-		return undef;
-	}
-
-	my $body = $http->content;
-	$body =~ s/<br\s*\/?>/\n/gi;
-	$body =~ s/<\/(p|tr|li|div|h[1-4])\s*>/\n/gi;
-	$body =~ s/<[^>]*>//g;
-	$body =~ s/&amp;/&/g;
-	$body =~ s/&lt;/</g;
-	$body =~ s/&gt;/>/g;
-	$body =~ s/&quot;/"/g;
-	$body =~ s/&#0?39;/'/g;
-	$body =~ s/[ \t]+\n/\n/g;
-	$body =~ s/\n{2,}/\n/g;
-	$body =~ s/^\s+|\s+$//g;
-
-	return $body ne '' ? $body : undef;
 }
 
 sub handler {
@@ -235,6 +217,12 @@ sub handler {
 	 # it unconditionally whenever present, rather than fitting it into the elsif chain.
 	 if ( defined $params->{'sc_mip_ostype'} ) {
 		$prefs->set( 'mipostype', $params->{'sc_mip_ostype'} );
+	 }
+
+	 # MusicIP Server / refresh sidecar ports - plain fields, saved via this page's own Save button.
+	 if ( $params->{'saveSettings'} ) {
+		$prefs->set( 'mipserverport', $params->{'sc_mip_serverport'} );
+		$prefs->set( 'miprefreshport', $params->{'sc_mip_refreshport'} );
 	 }
 
 	 # sc_mip_cpuuse is always present once this form has been posted once (it's a <select>, not an
@@ -250,23 +238,18 @@ sub handler {
 	 } elsif ( $params->{'sc_mip_cache_add'} ) {
 		my $root = getMipDefaultRoot();
 		my $ok = mipCommand('/server/add', root => $root);
+		mipSidecarRefresh() if $ok;
 		$params->{'prefs'}->{'mip_cache_feedback'} = $ok ? 'sent' : 'failed';
 		$sc_mipCache->{ts} = 0;
 	 } elsif ( $params->{'sc_mip_cache_refresh'} ) {
-		my $ok = getMipCacheStatus()->{mixer} ? mipSidecarRefresh() : mipCommand('/server/refresh');
+		my $mixerOnly = getMipCacheStatus()->{mixer};
+		my $ok = $mixerOnly ? mipSidecarRefresh() : mipCommand('/server/refresh');
+		mipSidecarRefresh() if !$mixerOnly && $ok;
 		$params->{'prefs'}->{'mip_cache_feedback'} = $ok ? 'sent' : 'failed';
 		$sc_mipCache->{ts} = 0;
-	 } elsif ( $params->{'sc_mip_cache_search'} ) {
-		my $query = $params->{'sc_mip_search_query'} || '';
-		$params->{'prefs'}->{'mip_search_query'} = $query;
-		if ($query eq '') {
-			$params->{'prefs'}->{'mip_cache_feedback'} = 'empty';
-		} else {
-			my $result = mipSearch($query);
-			$params->{'prefs'}->{'mip_search_result'} = defined $result ? $result : 'No results.';
-		}
 	 } elsif ( $params->{'sc_mip_cache_reload'} ) {
 		my $ok = mipCommand('/server/reload');
+		mipSidecarRefresh() if $ok;
 		$params->{'prefs'}->{'mip_cache_feedback'} = $ok ? 'sent' : 'failed';
 		$sc_mipCache->{ts} = 0;
 	 } elsif ( defined $params->{'sc_mip_cpuuse'} ) {
@@ -281,6 +264,7 @@ sub handler {
 	 $params->{'prefs'}->{'mip_active'} = $mipcache->{active};
 	 $params->{'prefs'}->{'mip_cpuuse'} = $mipcache->{cpuuse};
 	 $params->{'prefs'}->{'mip_reload'} = $mipcache->{reload};
+	 $params->{'prefs'}->{'mip_mixersongs'} = $mipcache->{mixersongs};
 	 my $mipVersion = getMipVersion();
 	 $params->{'prefs'}->{'mip_version'} = $mipVersion;
 	 $params->{'prefs'}->{'mip_mixer'} = $mipcache->{mixer};
@@ -290,6 +274,8 @@ sub handler {
 	 my $mipOstype = $prefs->get('mipostype') || 'linux';
 	 $params->{'prefs'}->{'mipostype'} = $mipOstype;
 	 $params->{'prefs'}->{'mip_default_root'} = getMipDefaultRoot();
+	 $params->{'prefs'}->{'mipserverport'} = $prefs->get('mipserverport');
+	 $params->{'prefs'}->{'miprefreshport'} = $prefs->get('miprefreshport');
 
 	 return $class->SUPER::handler( $client, $params );
 }

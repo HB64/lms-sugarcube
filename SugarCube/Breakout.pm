@@ -1106,7 +1106,7 @@ sub StatsPuller {
 	# ALBUM ART FOLLOWS MATERIAL, 2026-08-09. User: "Seems the best is to follow Material exactly."
 	###
 	my $sugarlvartask = '300x300_f'; # what we ask Lyrion for - Material's own list/grid spec
-	my $sugarlviconsize = 100;       # what we draw it at
+	my $sugarlviconsize = 56;        # matches the Queue panel's own cover size
 
 	my $path ||= Slim::Utils::OSDetect::dirsFor('prefs');
 	$path = catfile ($path, 'plugin', 'sugarcube.db');
@@ -1199,14 +1199,12 @@ sub StatsPuller {
 	(my $scLvReplacing = Slim::Utils::Strings::string('PLUGIN_SC_LV_REPLACING')) =~ s/([\\'])/\\$1/g;
 
 	###
-	# ICON BUTTON, Henk 2026-09-05 - visual only, ported from the hoofdmap build's "Play Next"
-	# icon. The mechanism underneath (this.innerHTML swap for the in-flight/refusal message, the
-	# onclick XHR, the 'replacesel' command, $scCanReplace hiding the whole link) is UNCHANGED -
-	# only what renders inside the <a> before it is clicked moves from an underlined text label to
-	# the same triangle+queue-bars SVG hoofdmap uses, in the .sc-mipbtn class hoofdmap defines.
-	# Title/aria-label keep this build's own string key (PLUGIN_SC_LV_USEASNEXT) rather than
-	# hoofdmap's hardcoded "Play Next" literal, since that is still the accurate description of
-	# what this action does here.
+	# ICON BUTTON, Henk 2026-09-05, icon swapped 2026-10-17 - visual only. The mechanism underneath
+	# (this.innerHTML swap for the in-flight/refusal message, the onclick XHR, the 'replacesel'
+	# command, $scCanReplace hiding the whole link) is UNCHANGED - only what renders inside the <a>
+	# before it is clicked. Now reuses the same "Replace Track" swap-arrows icon Live View's own
+	# Next Track row uses, instead of its own separate triangle+queue-bars SVG, so the two read as
+	# the same action everywhere on this page.
 	###
 	my $scLvUseAsNext = Slim::Utils::Strings::string('PLUGIN_SC_LV_USEASNEXT');
 	my $build = $scCanReplace
@@ -1222,7 +1220,7 @@ sub StatsPuller {
 		. "',['sugarcube','replacesel','"
 		. $col12
 		. "']]}));\">"
-		. '<svg width="40" height="24" viewBox="0 0 40 24" fill="currentColor"><polygon points="4,4 4,20 14,12"/><rect x="16" y="4" width="2.4" height="16"/><rect x="21" y="5" width="16" height="2.4"/><rect x="21" y="11" width="16" height="2.4"/><rect x="21" y="17" width="11" height="2.4"/></svg>'
+		. '<svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>'
 		. "</a>"
 		: '&nbsp;';
 
@@ -1232,7 +1230,7 @@ sub StatsPuller {
 	# No labels on the first four - the values say what they are. No album artist anywhere.
 	###
 	$line = $line
-		. '<tr><td rowspan=9 class=pic><img style="width:'
+		. '<tr><td rowspan=8 class=pic><img style="width:'
 		. $sugarlviconsize
 		. 'px !important; height:'
 		. $sugarlviconsize
@@ -1240,9 +1238,9 @@ sub StatsPuller {
 		. $col10
 		. "/cover_"
 		. $sugarlvartask
-		. '.jpg></td><td>'
+		. '.jpg><div style="text-align:center; margin-top:4px;">'
 		. $build
-		. '</td></tr><tr><td class=txt>'
+		. '</div></td><td class=txt>'
 		. $col1
 		. '</td></tr><tr><td style="vertical-align:middle">'
 		. $col2
@@ -1370,7 +1368,7 @@ sub HistoryPuller {
 	# $clientid_raw removed 2026-09-12 along with the Play Album button below - it existed only to
 	# address that button's own JSON-RPC call, and nothing else in this sub ever needed it.
 	my $sugarlvartask = '300x300_f'; # same Material-matching cover request as StatsPuller
-	my $sugarlviconsize = 100;
+	my $sugarlviconsize = 56; # matches the Queue panel's own cover size
 
 	my @history = GrabHistory($client);
 	my $line = '';
@@ -1380,25 +1378,15 @@ sub HistoryPuller {
 		if (!defined($albumart) || $albumart eq '') { $albumart = "0"; }
 
 		###
-		# "Play Album" REMOVED, Henk 2026-09-12. Ported in verbatim from the hoofdmap build's old
-		# History page on 2026-09-11 (see this sub's own header comment above) without re-applying
-		# the rule the user had already laid down for this exact pattern one build earlier - see
-		# "ONE BUTTON, 2026-08-09" above StatsPuller's own $build: "This is SC Live view. If we want
-		# to do anything manually here, above all it is to manually supersede the MIP/SC automatic
-		# selection... it is a track list. Why would a whole album get queued when I click +." Same
-		# objection, same answer: a one-tap full-album load sitting next to the Live View menu's
-		# other MIP-driven controls "gaat in tegen het MIP principe" - it bypasses the dynamic mix
-		# entirely rather than working with it, exactly what StatsPuller's Play Album/Add Album/Add
-		# Track removal was for. Unlike StatsPuller's row, no MIP-aligned replacement is offered
-		# here either: "Use as Next Track" needs a track id (col12 there), and the History table
-		# only ever stored artist/track/album/genre/albumart/fullalbum (see GrabHistory/SaveHistory
-		# below) - so for now the row simply carries no action, same as StatsPuller's own $build
-		# falls back to when $scCanReplace is false.
+		# No action offered here, Henk 2026-09-12 (Play Album removed - "gaat in tegen het MIP
+		# principe", same reasoning as StatsPuller's own $build when $scCanReplace is false): the
+		# History table only ever stored artist/track/album/genre/albumart/fullalbum (see
+		# GrabHistory/SaveHistory below), so there is no track id to act on even if there were a
+		# MIP-aligned action to offer. The row is purely informational - no icon/placeholder slot
+		# needed, so the first text line is the track title itself (2026-10-17).
 		###
-		my $build = '&nbsp;';
-
 		$line = $line
-			. '<tr><td rowspan=5 class=pic><img style="width:'
+			. '<tr><td rowspan=4 class=pic><img style="width:'
 			. $sugarlviconsize
 			. 'px !important; height:'
 			. $sugarlviconsize
@@ -1406,9 +1394,7 @@ sub HistoryPuller {
 			. $albumart
 			. "/cover_"
 			. $sugarlvartask
-			. '.jpg></td><td>'
-			. $build
-			. '</td></tr><tr><td style="vertical-align:middle">'
+			. '.jpg></td><td style="vertical-align:middle">'
 			. $track
 			. '</td></tr><tr><td style="vertical-align:middle">'
 			. $album

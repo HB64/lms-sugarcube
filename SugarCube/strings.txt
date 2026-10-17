@@ -85,13 +85,17 @@ PLUGIN_SC_WEB_MIPCACHE_OSTYPE_LINUX
 PLUGIN_SC_WEB_MIPCACHE_OSTYPE_WINDOWS
 	EN	Windows
 PLUGIN_SC_WEB_MIPCACHE
-	EN	MusicIP Cache
+	EN	MusicIP Server library
+PLUGIN_SC_WEB_MIPCACHE_MIXERLIB
+	EN	MusicIP Mixer library
 PLUGIN_SC_WEB_MIPCACHE_TOTAL
 	EN	Total songs
 PLUGIN_SC_WEB_MIPCACHE_MIXABLE
 	EN	Mixable
 PLUGIN_SC_WEB_MIPCACHE_TODO
 	EN	To validate
+PLUGIN_SC_WEB_MIPCACHE_MIXERSONGS
+	EN	Songs in Mixer
 PLUGIN_SC_WEB_MIPCACHE_STATUS
 	EN	Status
 PLUGIN_SC_WEB_MIPVALIDATE
@@ -119,15 +123,9 @@ PLUGIN_SC_WEB_MIPCACHE_RELOAD
 PLUGIN_SC_WEB_MIPCACHE_ADD
 	EN	Add music
 PLUGIN_SC_WEB_MIPCACHE_ADD_FROM
-	EN	Add music from
-PLUGIN_SC_WEB_MIPCACHE_SEARCH
-	EN	Search songs
+	EN	Adds music from:
 PLUGIN_SC_WEB_MIPCACHE_REFRESH
 	EN	Refresh songs
-PLUGIN_SC_WEB_MIPCACHE_EMPTY
-	EN	Enter a value first.
-PLUGIN_SC_WEB_MIPCACHE_SEARCH_RESULT
-	EN	Search result
 PLUGIN_SUGARCUBE_SLEEP_ON
 	EN	Enable Player Sleep
 PLUGIN_SUGARCUBE_SLEEP_OFF
@@ -418,3 +416,11 @@ PLUGIN_SC_WEB_NASCONVERTPATHDESC
 	EN	Path to main music directory in MusicIP. Empty means same music path as LMS. Paths will be dynamically converted between MIP and LMS if different.
 PLUGIN_SC_WEB_CLOSE
 	EN	Close
+PLUGIN_SC_WEB_MIPSERVERPORT
+	EN	MusicIP Server Port
+PLUGIN_SC_WEB_MIPSERVERPORTDESC
+	EN	Port of the MusicIP Server, which serves the library statistics and the Add music and Refresh actions. In the combined container this is 10003, while the Mixer port on the Main page stays 10002. Leave empty to use the MusicIP Port from the Main page; if that port serves no Server page, only the Mixer's song count is shown.
+PLUGIN_SC_WEB_MIPREFRESHPORT
+	EN	Refresh Sidecar Port
+PLUGIN_SC_WEB_MIPREFRESHPORTDESC
+	EN	Port of the refresh sidecar that restarts the Mixer after a library change - needed with a bare Mixer (no Server) to refresh it at all, and useful in a combined setup to keep the Mixer in sync with the Server. Leave empty to disable.

@@ -1,6 +1,8 @@
+[%# Forces the header/tab template to always match this plugin's own registered link, instead %]
+[%# of this subpage's own name (which never matches it) - same fix Alternative Play Count uses on %]
+[%# every one of its own pages, found by comparing its templates to ours.                           %]
+[% page = "PLUGIN_SUGARCUBE" %]
 [% PROCESS settings/header.html %]
-
-[% PROCESS plugins/SugarCube/settings/subpage_chooser.html %]
 
 [%# Same info-popover widget as settings.html's own copy - duplicated rather than shared through an %]
 [%# include, same reasoning as MIPster's mipm-info: a failed include path would take both pages     %]
@@ -67,6 +69,8 @@
 	[% content %]
 </div>
 [% END %]
+
+[% PROCESS plugins/SugarCube/settings/subpage_chooser.html %]
 
 [%# THE EXPORT STATUS LINE, ported from MIPster - above every setting, deliberately. Red is the     %]
 [%# default and green is only for success, so red covers running, aborted and finished-with-errors  %]

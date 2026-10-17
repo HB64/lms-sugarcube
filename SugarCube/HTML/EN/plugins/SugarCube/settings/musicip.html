@@ -1,6 +1,8 @@
+[%# Forces the header/tab template to always match this plugin's own registered link, instead %]
+[%# of this subpage's own name (which never matches it) - same fix Alternative Play Count uses on %]
+[%# every one of its own pages, found by comparing its templates to ours.                           %]
+[% page = "PLUGIN_SUGARCUBE" %]
 [% PROCESS settings/header.html %]
-
-[% PROCESS plugins/SugarCube/settings/subpage_chooser.html %]
 
 [%# Same info-popover widget as settings.html's own copy - duplicated rather than shared through an %]
 [%# include, same reasoning as MIPster's mipm-info: a failed include path would take both pages     %]
@@ -18,6 +20,14 @@
 		background:none; border:1px solid #9c9; color:#9c9; border-radius:16px;
 		padding:6px 16px; cursor:pointer; float:right; margin-top:12px;
 	}
+	/* Pill-style action button (Add music) - matches MIPster's MusicIP page. Material only: scoped
+	   under its own Vue/Vuetify wrapper (.v-card/.embedded-page), since Classic/Default's own
+	   .stdclick style wins there by specificity anyway - it just falls back to the skin's own button. */
+	.v-card .sc-pill-btn, .embedded-page .sc-pill-btn {
+		background:none; border:1px solid #5b9bd5; color:#5b9bd5; border-radius:16px;
+		padding:6px 16px; cursor:pointer;
+	}
+	.v-card .sc-pill-btn:hover, .embedded-page .sc-pill-btn:hover { background:rgba(91,155,213,0.15); }
 </style>
 <script type="text/javascript">
 	function scToggleInfo(el) {
@@ -47,17 +57,7 @@
 				p.style.display = 'none';
 			}
 		});
-		// Search result box - same outside-click-closes pattern as the info popovers above, plus its
-		// own X button (see scCloseSearchResult).
-		var box = document.getElementById('sc-mip-search-result-box');
-		if (box && box.style.display !== 'none' && !box.contains(e.target) && e.target.id !== 'sc_mip_cache_search') {
-			box.style.display = 'none';
-		}
 	});
-	function scCloseSearchResult() {
-		var box = document.getElementById('sc-mip-search-result-box');
-		if (box) { box.style.display = 'none'; }
-	}
 </script>
 
 [% BLOCK scinfosetting %]
@@ -78,11 +78,13 @@
 </div>
 [% END %]
 
+[% PROCESS plugins/SugarCube/settings/subpage_chooser.html %]
+
 [%# MIP Cache status, mirrors the "Cache" stats on MIP's own index page. Self-polls below, same %]
 [%# pattern as Live View - subpage switching here is a plain location.href navigation, not an SPA %]
 [%# swap, so a setInterval is torn down cleanly whenever the user leaves this page. %]
 <div id="sc-mip-cache-block" style="padding:4px 0 4px 4px;" data-mip-active="[% prefs.mip_active %]">
-	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE" | string %]</label>
+	<label class="stdlabel">[% (prefs.mip_mixer ? "PLUGIN_SC_WEB_MIPCACHE_MIXERLIB" : "PLUGIN_SC_WEB_MIPCACHE") | string %]</label>
 	[% IF prefs.mip_version %]
 	<div style="opacity:0.6; font-size:0.8em;">[% prefs.mip_version %]</div>
 	[% END %]
@@ -99,6 +101,12 @@
 			<span style="opacity:0.7; font-size:0.85em;">[% "PLUGIN_SC_WEB_MIPCACHE_TODO" | string %]</span><br>
 			<b>[% prefs.mip_todo %]</b>
 		</div>
+		[% IF prefs.mip_mixersongs && prefs.mip_mixersongs != '?' && !prefs.mip_mixer && prefs.mipserverport %]
+		<div>
+			<span style="opacity:0.7; font-size:0.85em;">[% "PLUGIN_SC_WEB_MIPCACHE_MIXERSONGS" | string %]</span><br>
+			<b>[% prefs.mip_mixersongs %]</b>
+		</div>
+		[% END %]
 	</div>
 	<div style="opacity:0.8; font-size:0.9em;">
 		[% "PLUGIN_SC_WEB_MIPCACHE_STATUS" | string %]: [% prefs.mip_active %]
@@ -182,16 +190,13 @@
 	<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE_ACTIONS" | string %]</label>
 	<br><br>
 	[% UNLESS prefs.mip_mixer %]
-	<label style="opacity:0.8;">[% "PLUGIN_SC_WEB_MIPCACHE_ADD_FROM" | string %] <span id="sc-mip-default-root-label">[% prefs.mip_default_root %]</span></label>
-	<input type="submit" class="stdclick" name="sc_mip_cache_add" value="[% "PLUGIN_SC_WEB_MIPCACHE_ADD" | string %]">
-	<br><br>
-	<input type="text" class="stdedit" name="sc_mip_search_query" value="[% prefs.mip_search_query %]" placeholder="Artist, title, album..." size="18">
-	<input type="submit" class="stdclick" name="sc_mip_cache_search" value="[% "PLUGIN_SC_WEB_MIPCACHE_SEARCH" | string %]">
+	<input type="submit" class="stdclick sc-pill-btn" name="sc_mip_cache_add" value="[% "PLUGIN_SC_WEB_MIPCACHE_ADD" | string %]">
+	<span style="opacity:0.8; margin-left:8px;">[% "PLUGIN_SC_WEB_MIPCACHE_ADD_FROM" | string %] <b id="sc-mip-default-root-label">[% prefs.mip_default_root %]</b></span>
 	<br><br>
 	[% END %]
 	<input type="submit" class="stdclick" name="sc_mip_cache_refresh" value="[% "PLUGIN_SC_WEB_MIPCACHE_REFRESH" | string %]">
 	[% IF prefs.mip_mixer %]
-	<div style="opacity:0.7; font-size:0.85em; margin-top:8px;">Adding music, searching and validation are not available with MusicIP Mixer - use the Mixer GUI.</div>
+	<div style="opacity:0.7; font-size:0.85em; margin-top:8px;">Adding music and validation are not available with MusicIP Mixer - use the Mixer GUI.</div>
 	[% END %]
 
 	<div id="sc-mip-cache-feedback">
@@ -199,18 +204,9 @@
 	<div style="opacity:0.8; font-size:0.9em; margin-top:6px;">[% "PLUGIN_SC_WEB_MIP_SENT" | string %]</div>
 	[% ELSIF prefs.mip_cache_feedback == 'failed' %]
 	<div style="opacity:0.8; font-size:0.9em; margin-top:6px; color:#e66;">[% "PLUGIN_SC_WEB_MIP_FAILED" | string %]</div>
-	[% ELSIF prefs.mip_cache_feedback == 'empty' %]
-	<div style="opacity:0.8; font-size:0.9em; margin-top:6px; color:#e66;">[% "PLUGIN_SC_WEB_MIPCACHE_EMPTY" | string %]</div>
 	[% END %]
 	</div>
 
-	[% IF prefs.mip_search_result %]
-	<div id="sc-mip-search-result-box" style="margin-top:10px;">
-		<label class="stdlabel">[% "PLUGIN_SC_WEB_MIPCACHE_SEARCH_RESULT" | string %]</label>
-		<span class="sc-info-icon" onclick="scCloseSearchResult()" style="float:right; cursor:pointer;" title="[% "PLUGIN_SC_WEB_CLOSE" | string %]">&#10005;</span>
-		<pre style="white-space:pre-wrap; background:#1a1a1a; padding:8px; border-radius:6px; max-height:300px; overflow:auto; font-size:0.85em;">[% prefs.mip_search_result | html %]</pre>
-	</div>
-	[% END %]
 </div>
 
 [%# Validation - CPU use posts to MIP immediately on change; Start/Stop act without touching any SC pref. %]
@@ -236,6 +232,16 @@
 	[% END %]
 	</div>
 </div>
+[% END %]
+
+[%# MusicIP Server / refresh sidecar - separate ports for a "combined container" setup where the %]
+[%# Mixer (Main's Host/Port) and the MusicIP Server, and optionally a refresh sidecar, each listen  %]
+[%# on their own port on the same host. Both blank = everything on the Mixer port, as before.        %]
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPSERVERPORT" desc="PLUGIN_SC_WEB_MIPSERVERPORTDESC" %]
+	<input type="text" class="stdedit" name="sc_mip_serverport" id="sc_mip_serverport" value="[% prefs.mipserverport %]" placeholder="10003" size="5">
+[% END %]
+[% WRAPPER scinfosetting title="PLUGIN_SC_WEB_MIPREFRESHPORT" desc="PLUGIN_SC_WEB_MIPREFRESHPORTDESC" %]
+	<input type="text" class="stdedit" name="sc_mip_refreshport" id="sc_mip_refreshport" value="[% prefs.miprefreshport %]" placeholder="8199" size="5">
 [% END %]
 
 [% PROCESS settings/footer.html %]

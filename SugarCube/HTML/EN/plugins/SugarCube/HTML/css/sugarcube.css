@@ -47,6 +47,11 @@ table.bottomside {
   width: auto;
   text-align: left;
 }
+/* Henk, 2026-10-17 - tightened to the minimum readable padding; a skin's own default td padding
+   (e.g. Material/Vuetify) otherwise bleeds into these plain, unclassed cells. */
+table.bottomside td {
+  padding: 1px 4px;
+}
 table.bottomside td.end{
   border-bottom: 2px solid #444444;
   padding-bottom: 0px;
