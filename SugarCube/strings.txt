@@ -461,6 +461,8 @@ PLUGIN_SC_PS_RESET
 	EN	Reset
 PLUGIN_SC_PS_SAVED
 	EN	Search saved
+PLUGIN_SC_PS_USEFILTER
+	EN	Use as filter for this player
 PLUGIN_SC_PS_SHORT
 	EN	Leaves less than %s - found %s
 PLUGIN_SC_PS_NOMATCH

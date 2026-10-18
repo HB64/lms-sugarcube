@@ -3940,6 +3940,11 @@ sub handleWebPowerSearch {
 	$params->{psfloor} = Plugins::SugarCube::PowerSearch::minFloor();
 	$params->{psstart} = Plugins::SugarCube::PowerSearch::minStart();
 
+	# "Use as filter for this player" checkbox, ported from MIPster 2026-10-18.
+	$params->{pssaved} = Plugins::SugarCube::PowerSearch::savedSearch ($client) ? 1 : 0;
+	$params->{psuse}   = ($params->{pssaved} && Plugins::SugarCube::PowerSearch::isPowerSearch ($prefs->client($client)->get('sugarcube_filteractive'))) ? 1 : 0;
+	$params->{pskey}   = Plugins::SugarCube::PowerSearch::psKey();
+
 	my @fields;
 	foreach my $f (@{ Plugins::SugarCube::PowerSearch::fields() }) {
 		my $hint = '';

@@ -88,6 +88,10 @@
 			</span>
 		</div>
 		<div style="margin-top:10px; display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
+			<label style="display:inline-flex; align-items:center; gap:6px; margin:0;"><input type="checkbox" id="ps-use" [% IF psuse %]checked [% END %][% IF !pssaved %]disabled [% END %]onchange="psUse(this)">[% "PLUGIN_SC_PS_USEFILTER" | string %]</label>
+			<span id="ps-use-msg" style="opacity:0.7;"></span>
+		</div>
+		<div style="margin-top:10px; display:flex; align-items:center; gap:9px; flex-wrap:wrap;">
 			<button type="button" onclick="psAddSet()" style="padding:5px 11px; cursor:pointer; font-size:0.92em;">[% "PLUGIN_SC_PS_ADDSET" | string %]</button>
 			<button type="button" onclick="psReset()" style="padding:5px 11px; cursor:pointer; font-size:0.92em;">[% "PLUGIN_SC_PS_RESET" | string %]</button>
 		</div>
@@ -338,6 +342,29 @@
 			if (holder.children.length === 0) { psAddSet(); }
 			psRelabel();
 		}
+	}
+
+	/* Choose or release Power Search as this player's filter. liveview.html has scPlayerCmd for
+	   this exact 'sugarcube setting' JSON-RPC dispatch, but this page is loaded standalone (no
+	   access to that script scope), so it sends its own POST to /jsonrpc.js instead - ported from
+	   MIPster 2026-10-18, whose equivalent posts to a dedicated mipsave.html GET endpoint that
+	   SugarCube has no counterpart for. */
+	function psUse(cb) {
+		var r = new XMLHttpRequest();
+		r.open('POST', '/jsonrpc.js', true);
+		r.setRequestHeader('Content-Type', 'application/json');
+		r.onloadend = function () {
+			var m = document.getElementById('ps-use-msg');
+			if (m) { m.textContent = (r.status == 200) ? '\u2713' : '!'; }
+			if (r.status == 200) {
+				setTimeout(function () { window.location.href = '[% webroot %]plugins/SugarCube/settings/liveview.html?player=[% player | uri %]'; }, 500);
+			}
+		};
+		r.send(JSON.stringify({
+			id: 1,
+			method: 'slim.request',
+			params: ["[% player %]", ['sugarcube', 'setting', 'sugarcube_filteractive:' + (cb.checked ? "[% pskey | html %]" : '0')]]
+		}));
 	}
 
 	function psAddSet() {
