@@ -381,7 +381,7 @@ PLUGIN_SC_WEB_QS_REPLACEQUEUE
 PLUGIN_SC_WEB_DSTMCLASH
 	EN	SugarCube Chain and DSTM clash: enabling Chain disables DSTM, and disabling Chain switches DSTM back on.
 PLUGIN_SC_WEB_QS_STATUS
-	EN	Chain (auto queuing)
+	EN	Auto Chain
 PLUGIN_SC_WEB_QS_CHAINSETTINGS
 	EN	Mix Settings
 PLUGIN_SC_WEB_QS_OFFNOTE

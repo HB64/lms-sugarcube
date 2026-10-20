@@ -477,6 +477,85 @@ sub postinitPlugin {
 			$dstmClient->execute(['playerpref', 'plugin.dontstopthemusic:provider', $saved]);
 		}
 	}, 'sugarcube_status');
+
+	###
+	# Resume-from-pause / enable-while-paused gap - Henk's request 2026-10-20: commandCallback only
+	# ever calls kickoff() off a 'playlist newsong' event, so until one actually fires, nothing gets
+	# queued - turning Chain on while the player sits paused/stopped on its last track does nothing,
+	# and unpausing afterwards does not fire 'newsong' either (same track, no song change), so it
+	# stays silent indefinitely. Modelled on Random Flow's own setAutoMix, which calls
+	# _maybeQueueNext() synchronously the moment Auto Mix switches on, for exactly this reason.
+	# kickoff() already no-ops safely unless we are down to exactly the last queued track
+	# (CheckPosition != 1), so calling it unconditionally here is safe.
+	###
+	$prefs->setChange(sub {
+		my ($pref, $new, $client) = @_;
+		return unless blessed($client);
+		return unless $new;
+		kickoff($client);
+	}, 'sugarcube_status');
+
+	###
+	# SugarCube/MIPster mutual toggle - Henk's request 2026-10-18: with both installed and Chain/
+	# Auto Mix on for the same player at once, each queues its own picks independently and the
+	# result is a queue that answers to neither. Same "last switch thrown wins, turning either one
+	# off never touches the other" pattern MIPster already uses for its own DSTM pairing - no
+	# saved/restored state, unlike the DSTM handling above, because neither plugin is the other's
+	# fallback home. preferences('plugin.mipster') is harmless whether or not MIPster is actually
+	# installed - it only ever opens/creates that prefs file, nothing more.
+	#
+	# FIXED 2026-10-18 (Henk's own JSON-RPC question flagged it): this was 'plugin.MIPster' at
+	# first, wrong case. preferences() keys its registry on the exact string with no normalisation
+	# (LMS Bug 7939's fix did not change that), so that call was silently a SEPARATE, unused
+	# Namespace object - not the one MIPster's own code (every file in that plugin) actually opens
+	# as 'plugin.mipster'. This direction (SC chain on -> switch MIPster's chain off) was a no-op
+	# the whole time; the reverse direction in MIPster's own Plugin.pm was already correct, since it
+	# references 'plugin.SugarCube' with the right case.
+	###
+	my $mipsterprefs = preferences('plugin.mipster');
+
+	$mipsterprefs->setChange(sub {
+		my ($pref, $new, $client) = @_;
+		return unless blessed($client);
+		return unless $new;
+		return unless $prefs->client($client)->get('sugarcube_status');
+		$log->info('MIPster chain switched on for ' . $client->name . ' - switching the SugarCube chain off');
+		$prefs->client($client)->set('sugarcube_status', 0);
+	}, 'chainStatus');
+
+	$prefs->setChange(sub {
+		my ($pref, $new, $client) = @_;
+		return unless blessed($client);
+		return unless $new;
+		return unless $mipsterprefs->client($client)->get('chainStatus');
+		$log->info('SC Chain switched on for ' . $client->name . ' - switching the MIPster chain off');
+		$mipsterprefs->client($client)->set('chainStatus', 0);
+	}, 'sugarcube_status');
+
+	###
+	# SugarCube/Random Flow mutual toggle - Henk's request 2026-10-20, same pattern as the
+	# SugarCube/MIPster pairing just above (last switch thrown wins, no saved/restored state).
+	# preferences('plugin.randomflow') is harmless whether or not Random Flow is installed.
+	###
+	my $randomflowprefs = preferences('plugin.randomflow');
+
+	$randomflowprefs->setChange(sub {
+		my ($pref, $new, $client) = @_;
+		return unless blessed($client);
+		return unless $new;
+		return unless $prefs->client($client)->get('sugarcube_status');
+		$log->info('Random Flow Auto Mix switched on for ' . $client->name . ' - switching the SugarCube chain off');
+		$prefs->client($client)->set('sugarcube_status', 0);
+	}, 'mixRunning');
+
+	$prefs->setChange(sub {
+		my ($pref, $new, $client) = @_;
+		return unless blessed($client);
+		return unless $new;
+		return unless $randomflowprefs->client($client)->get('mixRunning');
+		$log->info('SC Chain switched on for ' . $client->name . ' - switching Random Flow Auto Mix off');
+		$randomflowprefs->client($client)->set('mixRunning', 0);
+	}, 'sugarcube_status');
 }
 
 ###
@@ -3417,7 +3496,15 @@ sub commandCallback {
 	# 20-second heartbeat, ten seconds after playback began. The heartbeat itself is gone - see the
 	# note where it used to be defined. Nothing else was in this branch.
 
-	if ($request->isCommand ([ ['playlist'], ['newsong'] ])) {
+	# Henk's request 2026-10-20: also re-run the same check after 'playlist delete' - removing the
+	# one queued-ahead track (e.g. the Live page's own Remove button) while paused, then resuming
+	# the still-current track, fires neither 'newsong' (same track, no song change) nor anything
+	# else SugarCube was listening for, so the queue was left permanently at just the current track.
+	# kickoff()'s own CheckPosition==1 guard makes this safe to re-check on any delete, not just
+	# the one that empties the queue.
+	if ($request->isCommand ([ ['playlist'], ['newsong'] ])
+		|| $request->isCommand ([ ['playlist'], ['delete'] ]))
+	{
 		###
 		# ⚠ THIS PAUSE IS LOAD-BEARING. IT IS NOT A PERFORMANCE SETTING. Measured 2026-08-10.
 		###
@@ -3430,7 +3517,7 @@ sub commandCallback {
 		# A second setTimer stood here, arming the 20-second heartbeat 15 seconds after every track
 		# change. Removed in Edit 46 (2026-08-12) with the heartbeat itself. THE SugarDelay TIMER
 		# ABOVE IS A DIFFERENT THING AND STAYS - it is the load-bearing pause described above, one
-		# shot per track change, and it is what calls kickoff.
+		# shot per track change (or queue delete, since 2026-10-20), and it is what calls kickoff.
 	}
 	if ($request->isCommand ([ ['stop'] ])) {
 		$log->debug("We Stopped :(\n");

@@ -1058,6 +1058,7 @@
 			opacity: 0.85 !important;
 		}
 		.sc-livebtn-icon:hover { opacity: 1 !important; }
+		.sc-livebtn-icon[disabled] { opacity: 0.3 !important; cursor: default !important; }
 		[%# "Use as Next Track" icon in the MusicIP Track Recommendations table, Henk 2026-09-05 -  %]
 		[%# ported from the hoofdmap build's ".sc-mipbtn" (there used for its "Play Next" icon).      %]
 		[%# Built as a raw <a> string in Breakout.pm's StatsPuller (that table isn't TT-rendered, so %]
@@ -1428,8 +1429,8 @@
 			[%# them spans; still centered when only one of the two renders (never both absent now, since %]
 			[%# neither is gated any more).                                                                %]
 			<div style="margin-top:8px; display:flex; align-items:center; justify-content:center; gap:16px; width:100px;">
-			<button type="button" onclick="scPlayerCmd(['sugarcube','startchain'])" class="sc-livebtn-icon" aria-label="Start New Chain" title="Start New Chain"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
-			<button type="button" onclick="scPlayerCmd(['sugarcube','startbatch'])" class="sc-livebtn-icon" aria-label="Start New Batch" title="Start New Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+			<button type="button" [% IF !sc_on %]disabled [% END %]onclick="scPlayerCmd(['sugarcube','startchain'])" class="sc-livebtn-icon" aria-label="Start New Chain" title="Start New Chain"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+			<button type="button" [% IF !sc_on %]disabled [% END %]onclick="scPlayerCmd(['sugarcube','startbatch'])" class="sc-livebtn-icon" aria-label="Start New Batch" title="Start New Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
 			</div>
 		</div>
 
@@ -1476,8 +1477,8 @@
 			[%# both icons fit side by side in roughly the album art's own ~100px width rather than        %]
 			[%# eating extra vertical space on a phone.                                                   %]
 			<div style="margin-top:8px; display:flex; align-items:center; justify-content:center; gap:16px; width:100px;">
-			[% IF sc_can_act %]<button type="button" onclick="scPlayerCmd(['sugarcube','replacenext'])" class="sc-livebtn-icon" aria-label="Replace Track" title="Replace Track"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></button>[% END %]
-			<button type="button" onclick="scPlayerCmd(['sugarcube','addbatch'])" class="sc-livebtn-icon" aria-label="Add Mood Batch" title="Add Mood Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z"/></svg></button>
+			[% IF sc_can_act %]<button type="button" [% IF !sc_on %]disabled [% END %]onclick="scPlayerCmd(['sugarcube','replacenext'])" class="sc-livebtn-icon" aria-label="Replace Track" title="Replace Track"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg></button>[% END %]
+			<button type="button" [% IF !sc_on %]disabled [% END %]onclick="scPlayerCmd(['sugarcube','addbatch'])" class="sc-livebtn-icon" aria-label="Add Mood Batch" title="Add Mood Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z"/></svg></button>
 			</div>
 		</div>
 
@@ -1498,8 +1499,8 @@
 	[%# PlaySCBatch 'play'), so nothing new has to be guarded here.                                      %]
 	<div style="display:flex; align-items:center; justify-content:center; gap:16px; padding:20px 0;">
 		<div style="opacity:0.7;">[% "PLUGIN_SC_WEB_QS_NOTHINGPLAYING" | string %]</div>
-		<button type="button" onclick="scPlayerCmd(['sugarcube','startchain'])" class="sc-livebtn-icon" aria-label="Start New Chain" title="Start New Chain"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
-		<button type="button" onclick="scPlayerCmd(['sugarcube','startbatch'])" class="sc-livebtn-icon" aria-label="Start New Batch" title="Start New Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
+		<button type="button" [% IF !sc_on %]disabled [% END %]onclick="scPlayerCmd(['sugarcube','startchain'])" class="sc-livebtn-icon" aria-label="Start New Chain" title="Start New Chain"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg></button>
+		<button type="button" [% IF !sc_on %]disabled [% END %]onclick="scPlayerCmd(['sugarcube','startbatch'])" class="sc-livebtn-icon" aria-label="Start New Batch" title="Start New Batch"><svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg></button>
 	</div>
 	<hr>
 	[% END %]
