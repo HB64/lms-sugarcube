@@ -4272,7 +4272,13 @@ sub handleWebList {
 			# 'Last set MusicIP supplied' stood here and was removed in Edit 52. The label is now
 			# set once, above, and reads the same in both states because it is dated. Do not put a
 			# second wording back - that is how one table ended up with two names.
-			$params->{'track'} = 'Disabled or Album/Playlist playing. SugarCube is waiting.';
+			# Like MIPster: 'track' is set only when Lyrion has a track, so an empty queue draws the
+			# two-button row and not the full Current/Next cards.
+			my $waiturl = Slim::Player::Playlist::song($client) // '';
+			if ($waiturl ne '') {
+				my $waittrack = Slim::Schema->rs('Track')->objectForUrl ({ 'url' => $waiturl, });
+				$params->{'track'} = $waittrack->title if ($waittrack && defined $waittrack->title);
+			}
 
 		} else {
 			# Warn in Live View when there is no filter. The Genre half of this check went with
