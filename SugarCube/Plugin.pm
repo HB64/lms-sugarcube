@@ -946,6 +946,56 @@ sub jiveSugarCubeMenu {
 			},
 		},
 		{
+			text => Slim::Utils::Strings::string('PLUGIN_SUGARCUBE_KICKOFF'),
+			nextWindow => 'refresh',
+			actions => {
+				do => {
+					player => 0,
+					cmd => [ 'sugarcube', 'setting', 'sugarcube_auto:0' ],
+				},
+			},
+		},
+
+		# Actions, so the same plain do-item shape as Replace Next Track - no choiceStrings,
+		# nextWindow at ITEM level. idtype and id are placeholders: a mood seed carries no path, so
+		# PlaySCBatch never looks them up. The mood itself comes from the pref the picker sets.
+		{
+			text => Slim::Utils::Strings::string('PLUGIN_SC_WEB_QS_MOODPLAY'),
+			nextWindow => 'refresh',
+			actions => {
+				do => {
+					player => 0,
+					cmd => [ 'sugarcube', 'batch', 'mood', 'none', 0, 'play' ],
+				},
+			},
+		},
+
+		# Actions, not settings. Plain do-items with NO choiceStrings. The old shape was a
+		# one-element choice list with selectedIndex => 0 - an index deliberately out of range, since
+		# everything else here is 1-based - which printed "Replacing" / "Starting" into the value
+		# column so an action rendered as a permanent state.
+		# never produced a toast there. The SC Batch context items use this pattern too.
+		{
+			text => Slim::Utils::Strings::string('PLUGIN_JIVE_NEXT'),
+			nextWindow => 'refresh',
+			actions => {
+				do => {
+					player => 0,
+					cmd => [ 'sugarcube', 'setting', 'sugarcube_next:0' ],
+				},
+			},
+		},
+		{
+			text => Slim::Utils::Strings::string('PLUGIN_SC_WEB_QS_MOODADD'),
+			nextWindow => 'refresh',
+			actions => {
+				do => {
+					player => 0,
+					cmd => [ 'sugarcube', 'batch', 'mood', 'none', 0, 'add' ],
+				},
+			},
+		},
+		{
 			text => Slim::Utils::Strings::string('PLUGIN_SUGARCUBE_JIVE_SIZE'),
 			selectedIndex => $size_menu,
 			choiceStrings => [ map { "$_" } @size_menu_values ],
@@ -1135,32 +1185,6 @@ sub jiveSugarCubeMenu {
 			},
 		},
 
-		# Actions, not settings. Plain do-items with NO choiceStrings. The old shape was a
-		# one-element choice list with selectedIndex => 0 - an index deliberately out of range, since
-		# everything else here is 1-based - which printed "Replacing" / "Starting" into the value
-		# column so an action rendered as a permanent state.
-		# never produced a toast there. The SC Batch context items use this pattern too.
-		{
-			text => Slim::Utils::Strings::string('PLUGIN_JIVE_NEXT'),
-			nextWindow => 'refresh',
-			actions => {
-				do => {
-					player => 0,
-					cmd => [ 'sugarcube', 'setting', 'sugarcube_next:0' ],
-				},
-			},
-		},
-		{
-			text => Slim::Utils::Strings::string('PLUGIN_SUGARCUBE_KICKOFF'),
-			nextWindow => 'refresh',
-			actions => {
-				do => {
-					player => 0,
-					cmd => [ 'sugarcube', 'setting', 'sugarcube_auto:0' ],
-				},
-			},
-		},
-
 		# Mood, then the two ways to fire it. A song or an album batch is fired by right-clicking
 		# the thing itself; a mood has nothing to right-click, so it needs its own pair.
 		# the log - the same dead end the web page reaches.
@@ -1170,30 +1194,6 @@ sub jiveSugarCubeMenu {
 				go => {
 					player => 0,
 					cmd => [ 'sugarcube', 'setting', 'sugarcube_moodtypes:0' ],
-				},
-			},
-		},
-
-		# Actions, so the same plain do-item shape as Replace Next Track above - no choiceStrings,
-		# nextWindow at ITEM level. idtype and id are placeholders: a mood seed carries no path, so
-		# PlaySCBatch never looks them up. The mood itself comes from the pref the picker sets.
-		{
-			text => Slim::Utils::Strings::string('PLUGIN_SC_WEB_QS_MOODPLAY'),
-			nextWindow => 'refresh',
-			actions => {
-				do => {
-					player => 0,
-					cmd => [ 'sugarcube', 'batch', 'mood', 'none', 0, 'play' ],
-				},
-			},
-		},
-		{
-			text => Slim::Utils::Strings::string('PLUGIN_SC_WEB_QS_MOODADD'),
-			nextWindow => 'refresh',
-			actions => {
-				do => {
-					player => 0,
-					cmd => [ 'sugarcube', 'batch', 'mood', 'none', 0, 'add' ],
 				},
 			},
 		},
@@ -1637,6 +1637,19 @@ sub SugarCubeReplaceNext {
 			{ 'duration' => 5, 'block' => 0 }
 		);
 		$log->info("Replace Track refused - the Chain is off for this player\n");
+		return;
+	}
+
+	###
+	# Henk's request 2026-10-23: Replace Track must never touch a queue it didn't build itself - a
+	# running Batch or a loaded Album leaves far more than one track queued ahead. Without this
+	# guard, the delete below always ran regardless, then handed off to kickoff() to refill the
+	# slot - but kickoff() only ever adds when CheckPosition is exactly 1, so in Batch/Album mode
+	# (CheckPosition > 2) the delete went through and nothing came back. Same CheckPosition <= 2
+	# test the Live View page already hides this button behind (sc_can_act).
+	###
+	if (Plugins::SugarCube::Breakout::CheckPosition($client) > 2) {
+		$log->info("Replace Track refused - not available while a Batch or Album is queued\n");
 		return;
 	}
 
